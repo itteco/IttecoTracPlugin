@@ -1,0 +1,25 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+
+    <div id="search_content" class="search_block">
+      <h3><label for="q">Search for possible references</label></h3>
+      <form id="fullsearch" action="" method="get" onsubmit="return performSearch(this, '${href.jsonsearch()}');">
+        <div>
+          <input type="text" id="q" name="q" size="24" value="${query}" />
+          <input type="submit" value="${_('Search')}"/>
+        </div>
+        <em>* Drag-n-drop search results onto ticket to set a trace</em><br/>
+        <em>* Changes discarded unless you save it</em>
+        <table class="filters">
+          <tr py:for="row in group(filters,3)" py:with="rlen=len(row); fullrow = (rlen==3)">          
+            <td py:for="idx, filter in enumerate(row)" colspan="${fullrow and 1 or (idx ==(rlen-1) and (3-rlen))}">
+                <label for="${filter.name}" py:if="filter"><input type="checkbox" id="${filter.name}" name="${filter.name}" checked="${filter.active and 'checked' or None}"/>${filter.label}</label>
+            </td>
+          </tr>
+       </table>
+      </form>
+      <div id="results"/>
+    </div>
+
+</html>

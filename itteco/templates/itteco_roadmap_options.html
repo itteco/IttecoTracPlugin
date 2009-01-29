@@ -1,0 +1,21 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+
+
+<fieldset><legend>Include tickets of type</legend>
+    <div py:for="t in tkt_types">
+        <label><input type="checkbox" name="tkt_type" value="${t.index}" checked="${t.active and 'checked' or None}"/>
+        ${t.label}
+        </label>
+    </div>
+</fieldset>
+<fieldset><legend>Calculate upon</legend>
+    <div py:for="i in calc_on">
+        <label><input type="radio" name="calc_on" value="${i.value or ''}" checked="${i.active and 'checked' or None}"/>
+        ${i.label}
+        </label>
+    </div>
+</fieldset>
+
+</html>

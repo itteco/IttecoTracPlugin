@@ -1,0 +1,87 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+    <?python from itteco.utils.render import * ?>
+     <div py:def="render_js_config()" py:strip="">
+        window.progress_field_name = "${progress_field.name}";
+        window.current_milestone = ${as_js_dict(milestone)};
+        window.groups_config = {
+        <py:for each="group in groups">
+            "${group['name']}" : {
+            "src_statuses" : ${as_js_dict(group['source_status'])},
+            "statuses" : ${as_js_dict(group['status'])},
+            "action" : "${group['action']}"
+            },
+        </py:for>
+            "x":1
+        };
+        
+        window.stats_config = {
+        <py:for each="config in stats_config">
+            "${config['name']}" : {
+            "statuses" : ${as_js_dict(config['statuses'])},
+            "overall_completion" : ${config['overall_completion'] or 0},
+            "label" : "${config['label'] or config['name']}",
+            "css_class" : "${config['css_class']}"},
+        </py:for>
+            "x":1
+        }; 
+        window.stats_status_to_group = {${','.join(["'%s':'%s'" % (s, cfg['name']) for cfg in stats_config for s in cfg['statuses']])}};
+        window.actionUrl = "${href.whiteboard('modify')+'?action=change_task'}";        
+     </div>
+     <div py:def="render_milestones(items, level, maxlevel=-1)" py:strip="">
+        <py:if test="items and (maxlevel==-1 or (maxlevel-level)!=0)">
+            <br/>
+            <ul>
+                <li py:if="level==0"><a href="${href.whiteboard(board_type, 'none')}" class="item-droppable milestone">Backlog (no milestone)</a></li>
+                <py:for each="item in items">
+                <li><a href="${href.whiteboard(board_type, item.name)}" class="item-droppable milestone"><span>${item.name}</span><span class="milestone-type">[${item.level['label']}]</span></a>
+                ${render_milestones(item.kids, level +1, maxlevel)}
+                </li>
+                </py:for>
+                <li py:if="level==0"><a href="${href.whiteboard(board_type, 'not_completed_milestones')}">Select all active milestones</a></li>
+                <div id="milestones-completed" py:if="level==0">
+                    <input type="checkbox" name="completed" checked="${show_closed_milestones and 'checked' or None}" onchange="var loc = document.location.protocol+'//'+document.location.host+document.location.pathname; if(this.checked){loc=loc+'?' +(document.location.search ? (document.location.search +'${'&amp;'}') : '')+'show_closed_milestones=true'}; document.location=loc;"/><label>Show already completed milestones</label>
+                </div>
+            </ul>
+        </py:if>
+    </div>
+    <div py:def="render_progressbar()" py:strip="">
+        <table class="progress" width="100%">
+          <tr></tr>
+        </table>
+        <p class="percent"></p>
+        <dl></dl>
+    </div>
+    <div py:def="render_field(ticket, field)" py:strip="">
+      ${field['label']}:<br/>
+      <py:choose test="field.type" py:if="field">
+        <select py:when="'select'" id="field-${field.name}" name="field_${field.name}">
+          <option py:if="field.optional"></option>
+          <option py:for="option in field.options"
+                  selected="${ticket[field.name] == option or None}"
+                  py:content="option"></option>
+          <optgroup py:for="optgroup in field.optgroups"
+                    label="${optgroup.label}">
+            <option py:for="option in optgroup.options"
+                    selected="${ticket[field.name] == option or None}"
+                    py:content="option"></option>
+          </optgroup>
+        </select>
+        <span py:when="'checkbox'">
+          <input type="checkbox" id="field-${field.name}" name="field_${field.name}"
+                 checked="${ticket[field.name] == '1' and 'checked' or None}" value="1" />
+          <input type="hidden" name="field_checkbox_${field.name}" value="1" />
+        </span>
+        <label py:when="'radio'"
+               py:for="idx, option in enumerate(field.options)">
+          <input type="radio" name="field_${field.name}" value="${option}"
+                 checked="${ticket[field.name] == option or None}" />
+          ${option}
+        </label>
+         <input py:otherwise="" type="text" id="field-${field.name}" 
+              name="field_${field.name}" value="${ticket[field.name]}" />
+      </py:choose>
+    </div>
+</html>

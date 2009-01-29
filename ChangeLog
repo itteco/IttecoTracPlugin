@@ -1,0 +1,13 @@
+# Itteco Trac Plugin Changelog #
+
+IttecoTracPlugin 0.1.1 (January 28, 2009)
+* add filtering by team member on whiteboard
+* fix bugs on a whiteboard
+* move whiteboard in mainnavigation closer to roadmap
+* add powered by sign on whiteboard
+
+IttecoTracPlugin 0.1 (January 26, 2009)
+* Initial version of the plugin.
+* Hierarchical milestones support
+* Tickets traceability
+* Agile whiteboard

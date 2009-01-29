@@ -1,0 +1,19 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+
+ <py:match path="*/form[@id='prefs']/div" once="true">
+    <div py:attrs="select('@*')">${select("*|text()")}</div>
+    <fieldset><legend>Show milestones of type</legend>
+      <div py:for="m in mil_types">
+        <label><input type="radio" name="mil_type" value="${m.index}" checked="${m.active and 'checked' or None}"/>
+        ${m.label}
+        </label>
+      </div>
+   </fieldset>
+   <xi:include href="itteco_roadmap_options.html"/>
+
+ </py:match>
+ <xi:include href="roadmap.html" />
+
+</html>

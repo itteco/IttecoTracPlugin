@@ -1,0 +1,71 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+    
+    <xi:include href="itteco_whiteboard_utils.html" />
+              
+    <div id="ticket_${obj.id}" py:with="editable= 'TICKET_APPEND' in perm(obj.resource) or 'TICKET_CHGPROP' in perm(obj.resource) or False"
+        py:if="'TICKET_VIEW' in perm(obj.resource)"
+        class="widget ${(cfg.draggable and editable) and 'draggable' or ''}" status="${obj.status}" idx="${obj.id}" style="${cfg['weight'] and ('background-color:%s !IMPORTANT;' % cfg['weight']) or ''}">
+        <div class="title drag_handle">
+            <!-- ICON -->
+            <div class="status-icon" style="background-color: ${cfg.icon_bg_color or '#090'}; color:#FFF">${cfg.icon_text}</div>
+            <a href="${href.ticket(obj.id)}" py:if="obj.id">#${obj.id}</a> ${obj.summary}
+        </div>
+        <div class="body">
+          <div class="block summary" py:if="obj.id">
+              <div class='parameters'>
+                <div class='parameter' py:for="f in cfg.fields">
+                  <div class='parameter_name'>${f.label}:</div>
+                  <div class='parameter_value' field_name="${f.name}">${obj[f.name]}</div>
+                </div>
+                <div class='parameter' py:if="not cfg.draggable">
+                    ${render_progressbar()}
+                </div>
+              </div>
+          </div>
+          <div class="block description hidden" py:if="obj.id">
+              <div class='parameters'>
+                <div class='parameter'>
+                  <div class='parameter_value' field_name="description">${obj.description}</div>
+                </div>
+              </div>
+          </div>
+
+          
+          
+          <div class="block edit hidden" py:if="obj.id and editable">
+            <form onsubmit="save_ticket(this); return false;" onreset="$('.custom_drop_down',this).triggerHandler('reset')">
+              <div class='parameters'>
+                <div class='parameter' py:for="field in cfg.fields">${render_field(obj, field)}</div>
+                <div class='parameter'>Milestone:<br/> <xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></div>
+                <div class="parameter ${obj['status']!='closed' and 'hidden' or ''}" status='closed'>Resolution: <br/>
+                    <select name="field_resolution">
+                    <option py:for="option in resolutions" selected="${obj['resolution'] == option or None}">${option}</option>
+                    </select>
+                </div>
+              </div>
+              <input type="hidden" name="ticket" value="${obj.id}"/>
+              
+              <ul class="edit-buttons">
+                <li><input type="button" onclick="this.parentNode.reset(); return false;" value="Cancel" class="button-cancel" /></li>
+                <li><input value="Save" type="submit" class="button-submit" /></li>
+              </ul>
+            </form>
+          </div>
+          <!-- VIEWS UL/LI -->
+          <ul class="views" py:if="obj.id">
+            <li class="view summary active_tab">
+                <a onclick="return change_ticket_view($(this).parents('.widget'),'summary');" href="#">Summary</a>
+            </li>
+            <li class="view description">
+                <a onclick="return change_ticket_view($(this).parents('.widget'),'description');" href="#">Description</a>
+            </li>
+            <li class="view edit" py:if="editable">
+                <a onclick="return change_ticket_view($(this).parents('.widget'),'edit');" href="#">Edit</a>
+            </li>
+         </ul>
+        </div>
+    </div>
+</html>

@@ -1,0 +1,32 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+    
+    <div py:def="render_links(links, removable = False)" py:strip="">
+        <py:if test="links is not None and len(links)>0">
+          <li py:for="linked_ticket in links"><a href="${href.ticket(linked_ticket.id)}" idx="${linked_ticket.idx}">${linked_ticket.type} #${linked_ticket.id}: ${linked_ticket.summary} (${linked_ticket.status})</a>&nbsp;<a class="action_button" href="#" onclick="removeLinkFunction(this); return false;" py:if="removable" linkid="${linked_ticket.id}" item_type="ticket">Remove</a></li>
+        </py:if>
+    </div>
+    
+    <fieldset id="traceability"><legend>Traceability</legend>
+        <table width="100%">
+            <tr align="left"><th><b>${out_links.title}</b></th><th><b>${in_links.title}</b></th></tr>
+            <tr><td width="50%" valign="top">
+                <div class="outblock" style="min-height:40px">
+                    <ul>
+                        ${render_links(out_links.links, out_links.removable)}
+                        <py:if test="wiki_links and len(wiki_links)>0">
+                        <li py:for="linked_wiki in wiki_links"><a href="${href.wiki(linked_wiki)}" idx="99">wiki: ${linked_wiki}</a>&nbsp;<a href="#" class="action_button" onclick="removeLinkFunction(this); return false;" linkid="${linked_wiki}" item_type="wiki">Remove</a></li>
+                        </py:if>
+                    </ul>
+                </div>
+                </td>
+                <td width="50%" valign="top">
+                  <ul>
+                    ${render_links(in_links.links, in_links.removable)}
+                  </ul>
+                </td>
+            </tr>
+    </table>
+    </fieldset>
+</html>

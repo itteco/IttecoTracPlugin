@@ -1,0 +1,29 @@
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:xi="http://www.w3.org/2001/XInclude"
+      xmlns:py="http://genshi.edgewall.org/" py:strip="">
+
+    <div py:def="render_milestones(items, level, maxlevel=-1)" py:strip="">
+        <py:if test="items and (maxlevel==-1 or (maxlevel-level)!=0)">
+            <py:for each="item in items">
+                <div style="padding-left:${(level+1)*10}px" ><em>${item.name}</em>(${item.level['label']})</div>
+                ${render_milestones(item.kids, level +1, maxlevel)}
+            </py:for>
+        </py:if>
+    </div>
+
+    <div py:def="render_milestone_selection(parent, field_name='parent', maxlevel=-1)" py:strip="">
+        <div id="milestones_tree">
+            <div class="custom_drop_down" onclick="$(this).next().css('width', $(this).parent().attr('clientWidth'));$(this).next().toggle();"
+                onreset="$(this).text($('[name=\'old_${field_name}\']',this.parentNode).val());">
+                ${parent or ''}
+            </div>
+            <div class="custom_drop_down_box">
+                <div empty="1" style="min-height:1.3em;"><em></em></div>
+                ${render_milestones(milestones,0, maxlevel)}
+            </div>
+            <input type="hidden" name="${field_name}" value="${parent}"/>
+            <input type="hidden" name="old_${field_name}" value="${parent}"/>
+        </div>
+    </div>
+    ${render_milestone_selection(milestone_name,field_name, max_level or -1)}
+</html>
