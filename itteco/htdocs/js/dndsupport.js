@@ -1,4 +1,4 @@
-dragable_options = {helper:'clone',handle: '.searchable',opacity: 0.8, 'start' : function(e, ui){ui.helper.css('width',this.offsetWidth+'px');}};
+dragable_options = {helper:'clone',handle: 'dt',opacity: 0.8, 'start' : function(e, ui){ui.helper.css('width',this.offsetWidth+'px');}};
 
 searchViaJson=function(url, params){
     $.getJSON(url,params,

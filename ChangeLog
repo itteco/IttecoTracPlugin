@@ -1,4 +1,6 @@
 # Itteco Trac Plugin Changelog #
+IttecoTracPlugin 0.1.2 (February 02, 2009)
+* move colorization to server side
 
 IttecoTracPlugin 0.1.1 (January 28, 2009)
 * add filtering by team member on whiteboard

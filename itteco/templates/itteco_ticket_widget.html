@@ -7,7 +7,11 @@
               
     <div id="ticket_${obj.id}" py:with="editable= 'TICKET_APPEND' in perm(obj.resource) or 'TICKET_CHGPROP' in perm(obj.resource) or False"
         py:if="'TICKET_VIEW' in perm(obj.resource)"
-        class="widget ${(cfg.draggable and editable) and 'draggable' or ''}" status="${obj.status}" idx="${obj.id}" style="${cfg['weight'] and ('background-color:%s !IMPORTANT;' % cfg['weight']) or ''}">
+        class="widget ${(cfg.draggable and editable) and 'draggable' or ''}" status="${obj.status}" idx="${obj.id}"
+        weight_field_name="$cfg.weight_field_name"
+        max_weight="$cfg.max_weight"
+        min_color="$cfg.min_color"
+        max_color="$cfg.max_color">
         <div class="title drag_handle">
             <!-- ICON -->
             <div class="status-icon" style="background-color: ${cfg.icon_bg_color or '#090'}; color:#FFF">${cfg.icon_text}</div>
@@ -49,7 +53,7 @@
               <input type="hidden" name="ticket" value="${obj.id}"/>
               
               <ul class="edit-buttons">
-                <li><input type="button" onclick="this.parentNode.reset(); return false;" value="Cancel" class="button-cancel" /></li>
+                <li><input type="button" onclick="$(this).parents('form').get(0).reset(); return change_ticket_view($(this).parents('.widget'),'summary');" value="Cancel" class="button-cancel" /></li>
                 <li><input value="Save" type="submit" class="button-submit" /></li>
               </ul>
             </form>

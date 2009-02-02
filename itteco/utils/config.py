@@ -26,7 +26,7 @@ def get_version(db):
     cursor.execute(__select_sql)
     row = cursor.fetchone()
     if row and len(row) > 0:
-        return row[0].split('.')
+        return [int(i) for i in row[0].split('.')]
     return [0]
 
 def set_version(db):

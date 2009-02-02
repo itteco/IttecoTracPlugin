@@ -55,7 +55,24 @@ getProgressbarContext=function(widget){
              'estimate' : parseInt(vh.text()),
              'full_stats' : vh.attr('full_stats')}
 }
-
+colorizeWidget=function(widget){
+    var val = parseInt($(".summary .parameter_value[field_name='"+widget.attr('weight_field_name')+"']", widget).text());
+    var max_val = parseInt(widget.attr('max_weight'));
+    var min_color = widget.attr('min_color');
+    var max_color = widget.attr('max_color');
+    if(max_val && min_color && max_color){
+        var c = "rgb(";
+        for(var i=0; i<3; i++){
+            if (i!=0) c+=',';
+            var l = parseInt("0x"+min_color.substring(1+i*2,1+(i+1)*2),16);
+            var h = parseInt("0x"+max_color.substring(1+i*2,1+(i+1)*2),16);
+            c+=Math.round(l+(h-l)*(val/max_val));
+        }
+        c+=")";
+        console.log('c='+c);
+        widget.css('background-color',c);
+    }
+}    
 setupProgressbar=function(widget){
     var ctx = getProgressbarContext(widget);
     if(ctx.sum){
@@ -144,6 +161,7 @@ defaultPostprocess = function(ticket, data){
                 $(".parameter[status='"+data.status+"']", ticket).removeClass('hidden');
             }
             update_cell(ticket.parent());
+            colorizeWidget(ticket);
             change_ticket_view(ticket, 'summary');
         }else{
             ticket.remove();
@@ -236,7 +254,8 @@ $(document).ready(function(){
     $("a", $("#wb-section3")).attr("href", function(i){return $(this).attr("href")+document.location.search;});
     calcAllAggregates();
     $(".item-droppable", $("#wb-section2")).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});   
-    $(".draggable").draggable(draggable_options);    
+    $(".draggable").draggable(draggable_options);
+    $(".widget").each(function(i){colorizeWidget($(this))});
     $('#wb-error-panel').ajaxError(function(event, request, settings){
         $(this).append("<li>Error performing action: " + settings.url + "</li>");
     });

@@ -5,7 +5,7 @@ from trac.db import Table, Column, Index, DatabaseManager
 from itteco import __package__, __version__
 
 def do_upgrade(env, db, version):
-    if version>=[0,1,1]:
+    if version>=[0,1,2]:
         return True
     trac_cfg = env.config['trac']
     mainnav = trac_cfg.getlist('mainnav',[])

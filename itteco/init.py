@@ -21,7 +21,7 @@ class IttecoEvnSetup(Component):
     
     def environment_needs_upgrade(self, db):
         db_ver = get_version(db)
-        return db_ver < __version__.split('.')
+        return db_ver < [int(i) for i in __version__.split('.')]
     
     def upgrade_environment(self, db):
         db = db or self.env.get_db_cnx()

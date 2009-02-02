@@ -49,14 +49,16 @@ class DashboardModule(Component):
         "The ticket field that would be used for user story weight calculation")
 
     task_weight_field = Option('itteco-whiteboard-tickets-config', 'task_weight_field', 'complexity',
-        "The ticket field that would be used for user story weight calculation")
+        "The ticket field that would be used for ticket weight calculation")
 
     user_story_ticket_type = Option('itteco-whiteboard-tickets-config', 'user_story_ticket_type', 'story',
         "All tickets in a whiteboard would be grouped accorging their tracibility to this type of ticket")
     
-    team = ListOption('itteco-whiteboard-config', 'team',[])
+    team = ListOption('itteco-whiteboard-config', 'team',[],
+        doc="The comma separated list of the team memebers. Is used on whiteboard.")
     
-    milestone_summary_fields = ListOption('itteco-whiteboard-config', 'milestone_summary_fields', [])    
+    milestone_summary_fields = ListOption('itteco-whiteboard-config', 'milestone_summary_fields', ['business_value', 'complexity'],
+        doc="The comma separated list of the ticket fields for which totals would be calculated within milestone widget on whiteboard.")    
     
     _ticket_type_config = _old_ticket_config = _old_groups = _ticket_groups= None
     
@@ -77,12 +79,12 @@ class DashboardModule(Component):
 
             types = [ type.name for type in Type.select(self.env)]
             self.env.log.debug("ticket_config-types '%s'" % types)
-            ticket_type_config = {}
+            _ticket_type_config = {}
             for option in ticket_config:
                 try:
                     tkt_type, prop = option.split('.',1)
                     if tkt_type in types:
-                        ticket_type_config.setdefault(tkt_type, {'fields':default_fields})[prop] = ticket_config.get(option)
+                        _ticket_type_config.setdefault(tkt_type, {'fields':default_fields})[prop] = ticket_config.get(option)
                 except ValueError :
                     pass
                 
@@ -91,16 +93,16 @@ class DashboardModule(Component):
                     rgb = [int(i) for i in c.split(',',3)]
                     rgb.extend((0,)*(3-len(rgb)))
                     return rgb
-            keys =  ticket_type_config.keys()
+            keys =  _ticket_type_config.keys()
             for type in types:
                 if type not in keys:
-                    ticket_type_config[type]={'fields':default_fields}
+                    _ticket_type_config[type]={'fields':default_fields}
 
-            for key in  ticket_type_config.keys():
-                for prop, func in [('fields',self._get_ticket_fields),('min',get_color),('max', get_color)]:
-                    ticket_type_config[key][prop]=func(ticket_type_config[key].get(prop))
+            for key in  _ticket_type_config.keys():
+                for prop, func in [('fields',self._get_ticket_fields),]:#('min_color',get_color),('max_color', get_color)]:
+                    _ticket_type_config[key][prop]=func(_ticket_type_config[key].get(prop))
                     
-            self._ticket_type_config = ticket_type_config
+            self._ticket_type_config = _ticket_type_config
             self._old_ticket_config=ticket_config
         return self._ticket_type_config
         
@@ -199,10 +201,9 @@ class DashboardModule(Component):
         max_story_weight = self._get_max_weight(self.user_story_weight_field)
         max_task_weight = self._get_max_weight(self.task_weight_field)
         
-        user_stories = dict()
-
         dummy_story = dummy()
         dummy_story.tkt = dummy_story
+        user_stories = {dummy_story.id: {'story': dummy_story}}
         def append_ticket(ticket, tkt_group, story = dummy_story):
             id = story.tkt.id
             if not user_stories.has_key(id):
@@ -358,28 +359,17 @@ class DashboardModule(Component):
                             result = int_option
                     except:
                         pass
-                return result
+                break
         return result
 
-    def _add_rendering_properties(self, ticket, field_name, max_weight, props, default = 0):
+    def _add_rendering_properties(self, ticket, field_name, max_weight, props):
         tkt_cfg = self.ticket_type_config
         if tkt_cfg:
             cfg = tkt_cfg.get(ticket.tkt['type'])
             if cfg:
-                min = cfg.get('min')
-                max = cfg.get('max')
-                if min and max:
-                    weight = self._get_weight(ticket, field_name, max_weight, default)
-                    props['weight']='rgb(%s,%s,%s)' % tuple([int(h + (h-l)*weight) for h, l in zip(max, min)])
+                props['weight_field_name']=field_name
+                props['max_weight']=max_weight
                 props.update(cfg)
-                
-    def _get_weight(self, ticket, field_name, max_weight, default = 0):
-        val = default
-        try:
-            val = float(ticket.tkt[field_name])
-        except:
-            pass
-        return max_weight and val/max_weight or 0
 
     def _get_stats_config(self):
         all_statuses = set(TicketSystem(self.env).get_all_status())
@@ -418,7 +408,7 @@ class DashboardModule(Component):
         
     def filter_stream(self, req, method, filename, stream, data):
         if req.path_info.startswith('/whiteboard'):
-            data['transformed']=1#/html/body/div[4]/p[2]
+            data['transformed']=1
             stream |=Transformer('//*[@id="footer"]/p[@class="right"]').before(get_powered_by_sign())
       
         return  stream
