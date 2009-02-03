@@ -3,7 +3,7 @@
     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:xi="http://www.w3.org/2001/XInclude"
-      xmlns:py="http://genshi.edgewall.org/">
+      xmlns:py="http://genshi.edgewall.org/" py:strip="">
 
     <div py:def="render_milestones_table(items, level)" py:strip="">
         <py:if test="items">            
@@ -14,7 +14,7 @@
                 </td>
                 <td>
                   <a style="padding-left:${level*10}px" href="${panel_href(milestone.name)}">${milestone.name}</a>
-                  (${milestone.level['label']})
+                  [${milestone.level['label']}]
                 </td>
                 <td><py:if test="milestone.due">
                   ${format_date(milestone.due)}
@@ -31,12 +31,6 @@
             </py:for>
         </py:if>
     </div>
-
-    <py:match path="*/head">
-        <head py:attrs="select('@*')">
-            ${select("*|text()")}
-        </head>
-    </py:match>
     
     <py:match path="*/fieldset[@class='iefix']" once="true">
         <xi:include py:with="field_name='parent'; milestone_name= milestone.parent; maxlevel=max_milestone_level" href="itteco_milestones_dd.html" />
