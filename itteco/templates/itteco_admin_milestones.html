@@ -33,7 +33,7 @@
     </div>
     
     <py:match path="*/fieldset[@class='iefix']" once="true">
-        <xi:include py:with="field_name='parent'; milestone_name= milestone.parent; maxlevel=max_milestone_level" href="itteco_milestones_dd.html" />
+        Parent:<xi:include py:with="field_name='parent'; milestone_name= milestone.parent; max_level=max_milestone_level" href="itteco_milestones_dd.html" />
         <fieldset py:attrs="select('@*')">
             ${select("*|text()")}            
         </fieldset>
@@ -41,7 +41,7 @@
     </py:match>
 
     <py:match path="*/input[@type='submit' and @name='add']" once="true">
-        <xi:include py:with="field_name='parent';milestone_name= ''; maxlevel=max_milestone_level" href="itteco_milestones_dd.html" />
+        Parent:<xi:include py:with="field_name='parent';milestone_name= ''; max_level=max_milestone_level" href="itteco_milestones_dd.html" />
         <br/>
         <input py:attrs="select('@*')">
             ${select("*|text()")}

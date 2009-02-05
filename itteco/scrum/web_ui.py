@@ -333,13 +333,15 @@ class DashboardModule(Component):
         cursor = db.cursor()
         sql_params = [milestone, self.user_story_ticket_type]
         
-        sql = 'SELECT id FROM ticket WHERE milestone'
+        sql = 'SELECT id FROM ticket WHERE (milestone'
+        if milestone=='' or isinstance(milestone, list) and '' in milestone:
+            sql += ' IS NULL or milestone'
         if isinstance(milestone, list):
             sql += " IN (%s)" % ("%s,"*len(milestone))[:-1]
             sql_params[0:1] = milestone
         else:
             sql+='=%s'
-        sql+=' and type%s%%s' % (eq and '=' or '<>')        
+        sql+=') and type%s%%s' % (eq and '=' or '<>')        
 
         if userfilter:
             sql += ' AND owner=%s' 

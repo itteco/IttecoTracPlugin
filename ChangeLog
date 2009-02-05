@@ -1,4 +1,9 @@
 # Itteco Trac Plugin Changelog #
+IttecoTracPlugin 0.1.3 (February 06, 2009)
+* set reference to genshi 0.5.1 and newer to fic roadmap templates
+* bug fixes
+
+# Itteco Trac Plugin Changelog #
 IttecoTracPlugin 0.1.2 (February 02, 2009)
 * move colorization to server side
 
