@@ -63,7 +63,7 @@ class TicketLinks(object):
         
         if(outdated_ids):
             if(len(outdated_ids)>1):            
-                cursor.execute('DELETE FROM tkt_links WHERE src=%%s AND dest IN (%s)' % "%s,"*len(outdated_ids)[:-1], ((self.tkt.id,) + outdated_ids))
+                cursor.execute('DELETE FROM tkt_links WHERE src=%%s AND dest IN (%s)' % ("%s,"*len(outdated_ids))[:-1], ((self.tkt.id,) + tuple(outdated_ids)))
             else:
                 cursor.execute('DELETE FROM tkt_links WHERE src=%s AND dest=%s', (self.tkt.id, outdated_ids.pop()))
         
