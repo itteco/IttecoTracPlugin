@@ -209,7 +209,8 @@ class StructuredMilestone(Milestone):
             cursor = db.cursor()
             cursor.execute("UPDATE milestone_struct SET name=%s WHERE name=%s", (self.name, _old_name))
             cursor.execute("UPDATE milestone_struct SET parent=%s WHERE parent=%s", (self.name, _old_name))
-        if self.parent!=self._old_parent:
+        self.env.log.debug("Setting parent: new='%s' old='%s'" % (self.parent, self._old_parent))
+        if self.parent or self._old_parent and self.parent!=self._old_parent:
             cursor = db.cursor()
             cursor.execute("SELECT * FROM milestone_struct WHERE name=%s and parent=%s", (self.name, self._old_parent))
             if cursor.fetchone():
@@ -268,7 +269,7 @@ class StructuredMilestone(Milestone):
             return (m.completed or utcmax,
                     m.due or utcmax,
                     embedded_numbers(m.name))
-        sorted(mils, key=milestone_order)
+        mils.sort(key=milestone_order)
         for m in mils:
             StructuredMilestone._deep_sort(m.kids)
         return mils

@@ -1,4 +1,5 @@
 from datetime import datetime
+import sys
 from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
@@ -233,7 +234,7 @@ class DashboardModule(Component):
                 user_stories.setdefault(story_id, self._get_empty_group())['story']=story
                 self._add_rendering_properties(story, self.user_story_weight_field, max_story_weight, user_stories[story_id])
         data['stories'] = user_stories
-        data['row_items_iterator']= sorted([s['story'].tkt for s in user_stories.values()], key=lambda x: x and x.id or -1)
+        data['row_items_iterator']= sorted([s['story'].tkt for s in user_stories.values()], key=lambda x: x and x.id or sys.maxint)
 
             
     def _add_storyboard_data(self, req, data):

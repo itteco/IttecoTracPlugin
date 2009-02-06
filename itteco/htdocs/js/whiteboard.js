@@ -117,6 +117,7 @@ change_ticket_view=function(ticket, view){
     $('.active_tab',ticket).removeClass('active_tab');
     $('.views > .'+view,ticket).addClass('active_tab');
     $('.body', ticket).removeClass('hidden');
+    return false;
 }
 save_ticket = function(form){
     save_ticket_changes($(form).parents('.widget'),$(form).serialize(), defaultPostprocess);
