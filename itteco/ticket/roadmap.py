@@ -313,10 +313,12 @@ class IttecoRoadmapModule(RoadmapModule):
         if req.args.get('format') == 'ics':
             self.render_ics(req, db, milestones)
             return
-        level = int(req.args.get('mil_type', '2'))
+        max_level = len(IttecoEvnSetup(self.env).milestone_levels)
+        max_level = max_level and max_level-1 or 0;
+        current_level = int(req.args.get('mil_type', max_level))
         i =0
         calc_on = req.args.get('calc_on', None)
-        while i<level:
+        while i<current_level:
             next_level_mils = []
             for m in milestones:
                 next_level_mils.extend(m.kids)
@@ -343,7 +345,7 @@ class IttecoRoadmapModule(RoadmapModule):
                                    format='ics')
         add_link(req, 'alternate', icshref, _('iCalendar'), 'text/calendar',
                  'ics')
-        visibility = [{'index':idx, 'label': label, 'active': idx==level} for idx, label in enumerate(IttecoEvnSetup(self.env).milestone_levels)]
+        visibility = [{'index':idx, 'label': label, 'active': idx==current_level} for idx, label in enumerate(IttecoEvnSetup(self.env).milestone_levels)]
         tkt_types = [{'index':tkt.value, 'label': tkt.name, 'active': not selected_types or str(tkt.value) in selected_types} for tkt in Type.select(self.env)]
         
         calculate_on = self.get_statistics_source(req.args.get('calc_on', None))

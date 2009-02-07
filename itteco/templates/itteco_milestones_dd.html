@@ -13,8 +13,7 @@
 
     <div py:def="render_milestone_selection(parent, field_name='parent', maxlevel=-1)" py:strip="">
         <div id="milestones_tree">
-            <div class="custom_drop_down" onclick="$(this).next().css('width', $(this).parent().attr('clientWidth'));$(this).next().toggle();"
-                onreset="$(this).text($('[name=\'old_${field_name}\']',this.parentNode).val());">
+            <div class="custom_drop_down" onclick="toggleDD(this);">
                 ${parent or ''}
             </div>
             <div class="custom_drop_down_box">

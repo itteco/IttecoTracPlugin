@@ -306,6 +306,7 @@ class DashboardModule(Component):
                 actions = TicketSystem(self.env).get_available_actions(req, ticket)
                 if tkt_action not in actions:
                     raise TracError(_('Invalid action "%(name)s"', name=tkt_action))
+                req.args['action_%s_reassign_owner' % tkt_action]= req.authname != 'anonymous' and req.authname or ticket['owner']                
                 field_changes, problems = TicketModule(self.env).get_ticket_changes(req, ticket, tkt_action)
                 if problems:
                     raise TracError('Action execution failed "%s"' % problems)
