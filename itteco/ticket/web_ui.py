@@ -31,14 +31,16 @@ class IttecoTicketModule(Component):
         id = int(req.args.get('id'))
         ticket = Ticket(self.env, id)
         if ticket.exists:
+            def get_ids(req, attr_name):
+                ids = req.args.get(attr_name, [])
+                return isinstance(ids, basestring) and (ids,) or ids
+                
             links = TicketLinks(self.env, ticket)
-            links.outgoing_links = [int(id) for id in req.args.get('links_ticket', [])]
-            wiki_ids = req.args.get('links_wiki', [])
-            wiki_ids = not isinstance(wiki_ids, list) and (wiki_ids,) or wiki_ids
-            links.wiki_links = wiki_ids
+            links.outgoing_links = [int(id) for id in get_ids(req, 'links_ticket')]
+            links.wiki_links = get_ids(req, 'links_wiki')
             links.save()
         return req.args['original_handler'].process_request(req)
-                
+                    
     def post_process_request(self, req, template, data, content_type):
         if req.path_info.startswith('/ticket/') or req.path_info.startswith('/newticket') or req.path_info.startswith('/milestone'):
             add_stylesheet(req, 'itteco/css/common.css')
