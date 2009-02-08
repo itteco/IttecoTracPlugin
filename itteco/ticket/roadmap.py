@@ -194,7 +194,7 @@ class IttecoMilestoneModule(MilestoneModule):
             selected_types = isinstance(selected_types, list) and selected_types or [selected_types,]
         selected_type_names = [tkt_type.name for tkt_type in Type.select(self.env) if selected_types is None or tkt_type.value in selected_types]
 
-        tickets = get_tickets_for_structured_milestone(self.env, db, milestone.name, (by, calc_on), selected_type_names)
+        tickets = get_tickets_for_structured_milestone(self.env, db, milestone.name, [by, calc_on], selected_type_names)
         tickets = apply_ticket_permissions(self.env, req, tickets)
         stat = SelectionTicketGroupStatsProvider(self.env).get_ticket_group_stats(tickets, calc_on)
         self.env.log.debug("The collected stats '%s'" % stat)
