@@ -14,6 +14,7 @@ from itteco.ticket.utils import get_fields_by_names, get_tickets_for_milestones
 from itteco.init import IttecoEvnSetup
 
 def get_tickets_for_structured_milestone(env, db, milestone, field='component', types=None):
+    field = ['milestone'] + ( field and (isinstance(field, basestring) and [field,] or field) or [])
     mils = []
     sub_mils = [milestone,]
     while sub_mils:

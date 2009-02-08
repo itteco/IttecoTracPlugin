@@ -287,7 +287,7 @@ class DashboardModule(Component):
         elif name=='not_completed_milestones':
             return [mil.name for mil in Milestone.select(self.env, False)]        
         if name=='none':
-            return ''        
+            return ''
         return StructuredMilestone(self.env, name).name
         
             
@@ -332,7 +332,10 @@ class DashboardModule(Component):
         
     def _get_ticket_info(self, milestones, types= None, resolve_links=True):
         db = self.env.get_db_cnx()
-        tkts_info = get_tickets_for_milestones(db,  milestones, self._get_all_requested_fields(), types)
+        mils = isinstance(milestones, basestring) and [milestones] or list(milestones)
+        if '' in mils:
+            mils +=[None]
+        tkts_info = get_tickets_for_milestones(db,  mils, self._get_all_requested_fields(), types)
         if resolve_links:
             tkts_dict =dict([t['id'], t] for t in tkts_info)
             src_ids = tkts_dict.keys()
@@ -341,12 +344,13 @@ class DashboardModule(Component):
             links_dict = {}
             for src, dest in cursor:
                 links_dict.setdefault(dest, []).append(src)
-            linked_infos = get_tickets_by_ids(db, self._get_all_requested_fields(), links_dict.keys())
-            for linked_info in linked_infos:
-                referers = links_dict[linked_info['id']]
-                if referers:
-                    for ref_id in referers:
-                        tkts_dict[ref_id].setdefault('links',[]).append(linked_info);
+            if links_dict:
+                linked_infos = get_tickets_by_ids(db, self._get_all_requested_fields(), links_dict.keys())
+                for linked_info in linked_infos:
+                    referers = links_dict[linked_info['id']]
+                    if referers:
+                        for ref_id in referers:
+                            tkts_dict[ref_id].setdefault('links',[]).append(linked_info);
         return tkts_info
 
     def _get_max_weight(self, field_name, default = 0):
