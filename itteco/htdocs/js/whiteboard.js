@@ -204,13 +204,15 @@ acceptByTeamMember = function(draggable){
     return  group_cfg['src_statuses'][status];
 }
 filterTicketsByOwner = function(){
-    var owner = $(this).attr('owner');
+    var o = $(this);
+    var owner = o.attr('owner');
     if(owner!=''){
         $(".draggable").each(function(i){if ($("[field_name='owner']", this).text()==owner) {$(this).show();}else{$(this).hide();}} );
     }else{
         $(".draggable").show();
     }
     calcAllAggregates();
+    $(".active_filter", o.parents(".wb-panel-section").add("#wb-section-info-members")).text(o.text());
 }    
 enableAllAccordions = function(){
     $(".accordion_support").each(function(i){enableAccordionIfAny(this);});  

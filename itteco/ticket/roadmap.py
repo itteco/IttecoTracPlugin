@@ -10,49 +10,8 @@ from trac.ticket.roadmap import MilestoneModule, RoadmapModule, TicketGroupStats
 from trac.util.translation import _
 from trac.web.chrome import add_link, add_stylesheet, add_warning
 from itteco.ticket.model import StructuredMilestone
+from itteco.ticket.utils import get_fields_by_names, get_tickets_for_milestones
 from itteco.init import IttecoEvnSetup
-
-def get_tickets_for_milestones(env, db, milestone, fields='component', types=None):
-    cursor = db.cursor()
-    fields = isinstance(fields, list) or isinstance(fields, tuple)  and fields or [fields,]
-    mils = isinstance(milestone, list) and milestone or [milestone,]
-    place_holders = ("%s,"*len(mils))[:-1]
-
-    types_sql_limitation = ''
-    if types:
-        types = isinstance(types, list) and types or [types,]
-        types_sql_limitation = 'AND type in (%s)' % ("%s,"*len(types))[:-1]
-        mils.extend(types)
-        
-    allowed_fields = TicketSystem(env).get_ticket_fields()
-    field_and_type = [(f['name'], f.get('custom')) for f in allowed_fields if f['name'] in fields]
-    
-    sel_part = "SELECT id,status"
-    from_part = " FROM ticket "
-    order_part = None
-    custom_fields = []
-    for field, is_custom in field_and_type:
-        if not is_custom:
-            sel_part ="%s,%s" % (sel_part, field)
-            if not order_part:
-                order_part = "ORDER BY %s" % field
-        else:
-            custom_fields.append(field)
-            cnt = len(custom_fields)
-            sel_part ="%s,tc%d.value" % (sel_part, cnt)
-            from_part = "%s LEFT OUTER JOIN ticket_custom tc%d ON (id=tc%d.ticket AND tc%d.name=%%s)" % (from_part,cnt, cnt, cnt)
-            if not order_part:
-                order_part = "ORDER BY tc%d.value" % cnt
-                
-    cursor.execute("%s %s WHERE milestone IN (%s) %s " % (sel_part, from_part, place_holders, types_sql_limitation), custom_fields+mils)
-    tickets = []
-    
-    for fields in cursor:
-        item = {'id': fields[0], 'status': fields[1]}
-        for (field, is_custom), value in map(None, field_and_type, fields[2:]):
-            item[field] = value
-        tickets.append(item)
-    return tickets
 
 def get_tickets_for_structured_milestone(env, db, milestone, field='component', types=None):
     mils = []
@@ -62,7 +21,7 @@ def get_tickets_for_structured_milestone(env, db, milestone, field='component', 
         cursor = db.cursor()
         cursor.execute("SELECT name FROM milestone_struct WHERE parent  IN (%s) " % ("%s,"*len(sub_mils))[:-1], sub_mils)
         sub_mils = [sub_milestone for sub_milestone, in cursor if sub_milestone not in mils]
-    return get_tickets_for_milestones(env, db, mils, field, types)
+    return get_tickets_for_milestones(db, mils, get_fields_by_names(env, field), types)
 
 class SelectionTicketGroupStatsProvider(Component):
     def get_ticket_group_stats(self, tickets, field_name=None):

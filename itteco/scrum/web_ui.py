@@ -19,6 +19,7 @@ from trac.web.api import IRequestHandler, ITemplateStreamFilter
 from trac.web.chrome import INavigationContributor, add_script
 
 from itteco.ticket.model import StructuredMilestone, TicketLinks
+from itteco.ticket.utils import get_tickets_for_milestones, get_tickets_by_ids
 from itteco.utils import json
 from itteco.utils.render import get_powered_by_sign
 
@@ -88,30 +89,31 @@ class DashboardModule(Component):
                         _ticket_type_config.setdefault(tkt_type, {'fields':default_fields})[prop] = ticket_config.get(option)
                 except ValueError :
                     pass
-                
-            def get_color(c):
-                if c:                
-                    rgb = [int(i) for i in c.split(',',3)]
-                    rgb.extend((0,)*(3-len(rgb)))
-                    return rgb
+
             keys =  _ticket_type_config.keys()
             for type in types:
                 if type not in keys:
                     _ticket_type_config[type]={'fields':default_fields}
 
             for key in  _ticket_type_config.keys():
-                for prop, func in [('fields',self._get_ticket_fields),]:#('min_color',get_color),('max_color', get_color)]:
-                    _ticket_type_config[key][prop]=func(_ticket_type_config[key].get(prop))
+                _ticket_type_config[key]['fields']=self._get_ticket_fields(_ticket_type_config[key].get('fields'))
                     
             self._ticket_type_config = _ticket_type_config
             self._old_ticket_config=ticket_config
         return self._ticket_type_config
         
+    def _get_all_requested_fields(self):
+        all = [ f for cfg in self.ticket_type_config.values() for f in cfg.get('fields')]  + \
+            self._get_ticket_fields(['summary', 'description','milestone','resolution'])
+        field_dict = {}
+        for field in all:
+            field_dict[field['name']]=field
+        return field_dict.values()
+        
     def _get_ticket_fields(self, names,  default = None):
         if not names:
             return default
         names = isinstance(names, basestring) and [name.strip() for name in names.split(',')] or names
-        self.env.log.debug("Getting ticket fields for whiteboard '%s'" % names)
         return [field for field in TicketSystem(self.env).get_ticket_fields() \
                                 if field['name'] in names]
 
@@ -159,7 +161,7 @@ class DashboardModule(Component):
     def process_request(self, req):
         req.perm('ticket').require('TICKET_VIEW')
 
-        board_type = req.args.get('board_type', 'my_tasks')
+        board_type = req.args.get('board_type', 'team_tasks')
         if board_type=='modify':
             self._perform_action(req)
         else:    
@@ -169,7 +171,7 @@ class DashboardModule(Component):
                 'resolutions':[val.name for val in Resolution.select(self.env)],
                 'team' : self.team}
                 
-            for target, title in [('my_tasks', _('My Tasks')), ('team_tasks', _('Team Tasks')), ('stories', _('Stories'))]:
+            for target, title in [('team_tasks', _('Team Tasks')), ('stories', _('Stories'))]:
                 add_whiteboard_ctxtnav(data, title, board_type!=target and req.href.whiteboard(target) or None)
                 if board_type==target:
                     data['board_type_title'] = title
@@ -181,7 +183,7 @@ class DashboardModule(Component):
             return 'itteco_whiteboard.html', data, 'text/html'
 
     def _add_taskboard_data(self, req, data):
-        board_type = req.args.get('board_type', 'my_tasks')
+        board_type = req.args.get('board_type', 'team_tasks')
         milestone_name = req.args.get('milestone', 'nearest')
         
         milestone = self._resolve_milestone(milestone_name)
@@ -206,35 +208,33 @@ class DashboardModule(Component):
         dummy_story.tkt = dummy_story
         user_stories = {dummy_story.id: {'story': dummy_story}}
         def append_ticket(ticket, tkt_group, story = dummy_story):
-            id = story.tkt.id
+            id = story['id']
             if not user_stories.has_key(id):
                 user_stories[id] = self._get_empty_group()
                 user_stories[id]['story']=story
-                self._add_rendering_properties(story, self.user_story_weight_field, max_story_weight, user_stories[id])
+                self._add_rendering_properties(story['type'], self.user_story_weight_field, max_story_weight, user_stories[id])
             tkt_dict = {'ticket' : ticket}
-            self._add_rendering_properties(ticket, self.task_weight_field, max_task_weight, tkt_dict)
+            self._add_rendering_properties(ticket['type'], self.task_weight_field, max_task_weight, tkt_dict)
             user_stories[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        for tkt_id in self._get_ticket_ids(milestone, userfilter=(board_type=='my_tasks' and get_reporter_id(req) or None)):
-            linked_ticket = TicketLinks(self.env, tkt_id)
-            tkt_group = self._get_ticket_group(linked_ticket.tkt)
+        for tkt_info in self._get_ticket_info(milestone, resolve_links=True):
+            if tkt_info['type']==self.user_story_ticket_type:
+                sid = tkt_info['id']
+                user_stories.setdefault(sid, self._get_empty_group())['story']=tkt_info
+                self._add_rendering_properties(tkt_info['type'], self.user_story_weight_field, max_story_weight, user_stories[sid])
+                continue
+            tkt_group = self._get_ticket_group(tkt_info)
             story_found = False
-            links = linked_ticket.outgoing_links
+            links = tkt_info.get('links')
             if links:
-                for i_link in links:
-                    i_link_ticket = TicketLinks(self.env, i_link)
-                    if i_link_ticket.tkt['type']==self.user_story_ticket_type:
+                for link_info in links:
+                    if link_info['type']==self.user_story_ticket_type:
                         story_found = True
-                        append_ticket(linked_ticket, tkt_group, i_link_ticket)
+                        append_ticket(tkt_info, tkt_group, link_info)
             if not story_found:
-                append_ticket(linked_ticket, tkt_group)
-        for story_id in self._get_ticket_ids(milestone, True):
-            if not user_stories.has_key(story_id):
-                story = TicketLinks(self.env, story_id)
-                user_stories.setdefault(story_id, self._get_empty_group())['story']=story
-                self._add_rendering_properties(story, self.user_story_weight_field, max_story_weight, user_stories[story_id])
+                append_ticket(tkt_info, tkt_group)
         data['stories'] = user_stories
-        data['row_items_iterator']= sorted([s['story'].tkt for s in user_stories.values()], key=lambda x: x and x.id or sys.maxint)
+        data['row_items_iterator']= sorted([s['story'] for s in user_stories.values()], key=lambda x: x and x['id'] and int(x['id']) or sys.maxint)
 
             
     def _add_storyboard_data(self, req, data):
@@ -264,13 +264,12 @@ class DashboardModule(Component):
                 user_stories[id] = self._get_empty_group()
                 user_stories[id]['fields']=milestone_sum_fields
             tkt_dict = {'ticket' : ticket}
-            self._add_rendering_properties(ticket, self.user_story_weight_field, max_story_weight, tkt_dict)
+            self._add_rendering_properties(ticket['type'], self.user_story_weight_field, max_story_weight, tkt_dict)
             user_stories[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        for tkt_id in self._get_ticket_ids(milestone, True):
-            linked_ticket = TicketLinks(self.env, tkt_id)
-            tkt_group = self._get_ticket_group(linked_ticket.tkt)
-            append_ticket(linked_ticket, tkt_group, linked_ticket.tkt['milestone'])
+        for tkt_info in self._get_ticket_info(milestone, self.user_story_ticket_type):
+            tkt_group = self._get_ticket_group(tkt_info)
+            append_ticket(tkt_info, tkt_group, tkt_info['milestone'])
             
         for mil in milestone:
             if not user_stories.has_key(mil):
@@ -329,29 +328,26 @@ class DashboardModule(Component):
 
         db.commit()
         req.write('(%s)' % json.write(data))
-    
-    def _get_ticket_ids(self, milestone=None, eq=False, userfilter= None):
+        
+    def _get_ticket_info(self, milestones, types= None, resolve_links=True):
         db = self.env.get_db_cnx()
-        cursor = db.cursor()
-        sql_params = [milestone, self.user_story_ticket_type]
-        
-        sql = 'SELECT id FROM ticket WHERE (milestone'
-        if milestone=='' or isinstance(milestone, list) and '' in milestone:
-            sql += ' IS NULL or milestone'
-        if isinstance(milestone, list):
-            sql += " IN (%s)" % ("%s,"*len(milestone))[:-1]
-            sql_params[0:1] = milestone
-        else:
-            sql+='=%s'
-        sql+=') and type%s%%s' % (eq and '=' or '<>')        
+        tkts_info = get_tickets_for_milestones(db,  milestones, self._get_all_requested_fields(), types)
+        if resolve_links:
+            tkts_dict =dict([t['id'], t] for t in tkts_info)
+            src_ids = tkts_dict.keys()
+            cursor = db.cursor()
+            cursor.execute("SELECT src, dest FROM tkt_links WHERE src IN (%s)" % (len(src_ids)*"%s,")[:-1], src_ids)
+            links_dict = {}
+            for src, dest in cursor:
+                links_dict.setdefault(dest, []).append(src)
+            linked_infos = get_tickets_by_ids(db, self._get_all_requested_fields(), links_dict.keys())
+            for linked_info in linked_infos:
+                referers = links_dict[linked_info['id']]
+                if referers:
+                    for ref_id in referers:
+                        tkts_dict[ref_id].setdefault('links',[]).append(linked_info);
+        return tkts_info
 
-        if userfilter:
-            sql += ' AND owner=%s' 
-            sql_params.append(userfilter)
-        cursor.execute(sql, tuple(sql_params))
-        ids = [int(tkt_id) for tkt_id, in cursor]       
-        return ids
-        
     def _get_max_weight(self, field_name, default = 0):
         result = default;
         for field in TicketSystem(self.env).get_ticket_fields():
@@ -366,10 +362,10 @@ class DashboardModule(Component):
                 break
         return result
 
-    def _add_rendering_properties(self, ticket, field_name, max_weight, props):
+    def _add_rendering_properties(self, ticket_type, field_name, max_weight, props):
         tkt_cfg = self.ticket_type_config
         if tkt_cfg:
-            cfg = tkt_cfg.get(ticket.tkt['type'])
+            cfg = tkt_cfg.get(ticket_type)
             if cfg:
                 props['weight_field_name']=field_name
                 props['max_weight']=max_weight

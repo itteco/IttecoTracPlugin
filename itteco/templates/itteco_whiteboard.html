@@ -25,8 +25,6 @@
     <ul id="wb-tabs" py:if="whitebord_ctxtnav">
       <li py:for="i, elm in enumerate(whitebord_ctxtnav)">$elm</li>
     </ul>
-    <!-- STATUS -->
-    <p id="wb-status">Progress bars consider <strong>${progress_field['label']}</strong> progress.</p>
     <!-- PANEL -->
     <div id="wb-panel">
     
@@ -41,8 +39,8 @@
             </span>
         </div>    
         <div id="wb-section-info">
-	        <span id="wb-section-info-members" py:if="board_type!='my_tasks'">
-	            <strong>Team:</strong> ${team and len(team) or 0} member(s)
+	        <span id="wb-section-info-members">
+	            <strong>Team:</strong> ${team and len(team) or 0} member(s) / Selected: <span class="active_filter">All</span>
             </span>
             <span id="wb-section-info-milestone" py:if="board_type!='stories'">
             	<strong>Milestone:</strong> <a href="#">${(milestone and isinstance(milestone, list) and ", ".join(milestone) or milestone) or 'Backlog (no milestone)'}</a>
@@ -58,11 +56,12 @@
                 <p>Click to milestone to display assigned tickets.</p>
             </div>
     
-            <div class="wb-panel-section" id="wb-section2" py:if="board_type!='my_tasks'">
-                <strong>Team:</strong> 
+            <div class="wb-panel-section" id="wb-section2">
+                <strong>Team:</strong> / Selected: <span class="active_filter">All</span>
                 <ul>
                     <li class="item-droppable" py:for="member in team" status="assigned">
-                        <a href="#" owner="${member}">${member}</a></li>
+                        <a href="#" owner="${member}">${member}</a></li><br/>
+                    <li class="${authname!='anonymous' and 'item-droppable' or ''}" status="assigned"><a href="#" owner="${authname}">Me</a></li>
                     <li><a href="#" owner="">All</a></li>
                 </ul>
             </div>
@@ -101,13 +100,16 @@
                 </th>
                 <td py:for="idx, gr in enumerate(groups)" py:with="key = gr.name"  class="droppable ${idx % 2 and 'group_odd' or 'group_even'} ${gr.accordion and 'accordion_support' or ''}" status="${key}" action="${gr.action}">
                     <py:for each="item in items[key]"><?python item['draggable']=True;?>
-                        <xi:include href="itteco_ticket_widget.html" py:with="obj=item['ticket'].tkt; cfg=item"/>
+                        <xi:include href="itteco_ticket_widget.html" py:with="obj=item['ticket']; cfg=item"/>
                     </py:for>
                 </td>
               </tr>
           </tbody>
         </table>
-	</div>    
+	</div>
+    <!-- STATUS -->
+    <p id="wb-status">Progress bars consider <strong>${progress_field['label']}</strong> progress.</p>
+
   </div>
  </body>
 </html>

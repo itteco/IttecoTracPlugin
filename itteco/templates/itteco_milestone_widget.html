@@ -6,7 +6,7 @@
     <xi:include href="itteco_whiteboard_utils.html" />
     
     <div class="widget milestone_widget calculated" py:with="name = obj and obj.name or ''" idx="${name}"
-        py:if="'MILESTONE_VIEW' in perm(obj.resource)">
+        py:if="'MILESTONE_VIEW' in perm(obj.name)">
       <div class="title drag_handle"><a href="${href.milestone(name)}" py:if="name">${name}</a><em py:if="name and obj.level">&nbsp;[${obj.level.label}]</em><span py:if="obj.due"><br/>Due in: ${format_date(obj.due)}</span>
         <span py:if="not name">Backlog (Not assigned to any milestone)</span></div>
       <div class="body" py:if="name">

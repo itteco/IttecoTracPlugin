@@ -31,7 +31,7 @@ class TicketLinks(object):
         self._old_outgoing_links = copy(self.outgoing_links)
         
         self.incoming_links = set([num for num, in TicketLinks._fetch_raw_refs(self.tkt.id, cursor, reverse = True)])
-        cursor.execute("SELECT value FROM ticket_custom WHERE ticket=%s AND name='wiki_ref'", (self.tkt.id,))        
+        cursor.execute("SELECT value FROM ticket_custom WHERE ticket=%s AND name='wiki_ref'", (self.tkt.id,))
         row = cursor.fetchone()
         self.wiki_links = set()
         if(row and len(row)>0):

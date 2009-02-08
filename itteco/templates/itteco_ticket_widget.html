@@ -5,8 +5,8 @@
     
     <xi:include href="itteco_whiteboard_utils.html" />
               
-    <div id="ticket_${obj.id}" py:with="editable= 'TICKET_APPEND' in perm(obj.resource) or 'TICKET_CHGPROP' in perm(obj.resource) or False"
-        py:if="'TICKET_VIEW' in perm(obj.resource)"
+    <div id="ticket_${obj.id}" py:with="editable= 'TICKET_APPEND' in perm(obj.id) or 'TICKET_CHGPROP' in perm(obj.id) or False"
+        py:if="'TICKET_VIEW' in perm(obj.id)"
         class="widget ${(cfg.draggable and editable) and 'draggable' or ''}" status="${obj.status}" idx="${obj.id}"
         weight_field_name="$cfg.weight_field_name"
         max_weight="$cfg.max_weight"
@@ -46,7 +46,7 @@
                 <div class='parameter'>Milestone:<br/> <xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></div>
                 <div class="parameter ${obj['status']!='closed' and 'hidden' or ''}" status='closed'>Resolution: <br/>
                     <select name="field_resolution">
-                    <option py:for="option in resolutions" selected="${obj['resolution'] == option or None}">${option}</option>
+                    <option py:for="option in resolutions" selected="${obj.resolution == option or None}">${option}</option>
                     </select>
                 </div>
               </div>
