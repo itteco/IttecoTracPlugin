@@ -1,4 +1,5 @@
 from trac.ticket import TicketSystem
+from trac.util.compat import set
 
 def get_fields_by_names(env, names):
     if names:
@@ -28,7 +29,7 @@ def get_tickets_by_filter(db, fields, **kwargs):
         vals = kwargs.get(field)
         if vals:
             sql_filter = is_custom and 'tc%s.value' % len(custom_fields) or  "t.%s" % field
-            if isinstance(vals,list):
+            if isinstance(vals,list) or isinstance(vals,tuple) or isinstance(vals,set):
                 sql_filter = "%s in (%s) " % ( sql_filter, (len(vals)*"%s,")[:-1])
                 params.extend(vals)
             else:

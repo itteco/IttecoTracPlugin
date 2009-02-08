@@ -252,7 +252,7 @@ make_droppable = function(obj, acceptCheck, prepare, postprocess){
 
 $(document).ready(function(){
     enableAllAccordions();
-    $("#wb-tabs > li").not(":has(a)").addClass("active");
+    $("#wb-tabs > li:has(a.active)").addClass("active");
     $('a',$('#wb-section2')).bind('click', filterTicketsByOwner)
     $("a", $("#wb-section3")).attr("href", function(i){return $(this).attr("href")+document.location.search;});
     calcAllAggregates();

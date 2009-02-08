@@ -863,3 +863,6 @@ table.whiteboard_table tbody tr.odd td {
 #results .ui-draggable-disabled dt a {
 	color: #ab6565;
 }
+.completed_milestone {
+    text-decoration: line-through;
+}

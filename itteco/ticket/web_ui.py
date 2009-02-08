@@ -14,6 +14,7 @@ from trac.wiki.web_ui import WikiModule
 
 from itteco.ticket.admin import IttecoMilestoneAdminPanel
 from itteco.ticket.model import TicketLinks, StructuredMilestone
+from itteco.ticket.utils import get_fields_by_names, get_tickets_by_ids
 from itteco.utils.json import write
 from itteco.utils.render import hidden_items
 
@@ -71,9 +72,12 @@ class IttecoTicketModule(Component):
             stream |=Transformer('//*[@id="target"]').after(chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
             
         if 'ticket' in data:
+            tkt = data['ticket']
             mydata ={'milestones':StructuredMilestone.select(self.env),
                  'milestone_name': data['ticket']['milestone'],
-                 'field_name' : 'field_milestone'}
+                 'field_name' : 'field_milestone',
+                 'hide_completed' : not ( tkt.exists and 'TICKET_ADMIN' in req.perm(tkt.resource))
+                 }
             req.chrome.setdefault('ctxtnav',[]).insert(-1, tag.a(_('Open Containing Whiteboard'), href=req.href.whiteboard('team_tasks',data['ticket']['milestone'] or 'none')))
             stream |=Transformer('//*[@id="field-milestone"]').replace(chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
 
@@ -85,19 +89,21 @@ class IttecoTicketModule(Component):
             mydata['filters']=data.get('filters',[])
             stream |=Transformer('//*[@id="ticket"]').append(chrome.render_template(req, 'itteco_links.html', mydata, fragment=True))
             stream |=Transformer('//*[@id="content"]').after(chrome.render_template(req, 'itteco_search_pane.html', mydata, fragment=True));
-            stream |=Transformer('//*[@id="propertyform"]').append(hidden_items('links_ticket', data['ticket_links'].outgoing_links))
-            stream |=Transformer('//*[@id="propertyform"]').append(hidden_items('links_wiki', data['ticket_links'].wiki_links))
+            stream |= Transformer('//*[@id="propertyform"]').append( \
+                tag(hidden_items('links_ticket', data['ticket_links'].outgoing_links), \
+                    hidden_items('links_wiki', data['ticket_links'].wiki_links)))
         return stream
         
     def _ids_to_tickets(self, ids):
-        all_types = [ticket.name for ticket in Type.select(self.env)]
-        tickets = list()
-        for tkt_id in ids:
-            ticket = Ticket(self.env, tkt_id)
-            ticket['idx'] ='%02d' % all_types.index(ticket['type']) 
-            tickets.append(ticket)
-        tickets.sort(key= lambda x: '%s %s' % (x['idx'], x.id))
-        return tickets
+        if ids:
+            all_types = [type.name for type in Type.select(self.env)]
+            fields = get_fields_by_names(self.env, 'summary')
+            tickets = []
+            for tkt_info in get_tickets_by_ids(self.env.get_db_cnx(), fields, ids):
+                tkt_info['idx'] ='%02d' % all_types.index(tkt_info['type']) 
+                tickets.append(tkt_info)
+            tickets.sort(key= lambda x: '%s %s' % (x['idx'], x['id']))
+            return tickets
 
     def get_ticket_search_results(self, req):
         req.args['ticket']=1

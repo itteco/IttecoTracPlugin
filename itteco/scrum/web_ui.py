@@ -23,11 +23,11 @@ from itteco.ticket.utils import get_tickets_for_milestones, get_tickets_by_ids
 from itteco.utils import json
 from itteco.utils.render import get_powered_by_sign
 
-def add_whiteboard_ctxtnav(data, elm_or_label, href=None, title=None):
+def add_whiteboard_ctxtnav(data, elm_or_label, href=None, **kwargs):
     """Add an entry to the whiteboard context navigation bar.
     """
     if href:
-        elm = tag.a(elm_or_label, href=href, title=title)
+        elm = tag.a(elm_or_label, href=href, **kwargs)
     else:
         elm = elm_or_label
     data.setdefault('whitebord_ctxtnav', []).append(elm)
@@ -172,7 +172,7 @@ class DashboardModule(Component):
                 'team' : self.team}
                 
             for target, title in [('team_tasks', _('Team Tasks')), ('stories', _('Stories'))]:
-                add_whiteboard_ctxtnav(data, title, board_type!=target and req.href.whiteboard(target) or None)
+                add_whiteboard_ctxtnav(data, title, req.href.whiteboard(target), class_= board_type==target and "active" or '')
                 if board_type==target:
                     data['board_type_title'] = title
 
@@ -231,6 +231,7 @@ class DashboardModule(Component):
                     if link_info['type']==self.user_story_ticket_type:
                         story_found = True
                         append_ticket(tkt_info, tkt_group, link_info)
+                        break
             if not story_found:
                 append_ticket(tkt_info, tkt_group)
         data['stories'] = user_stories
