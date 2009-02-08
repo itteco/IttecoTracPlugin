@@ -1,9 +1,9 @@
 toggleDD=function(obj){    
     var o=$(obj); 
     o.next().css('width', o.parent().attr('clientWidth')).toggle();
-    console.log('togglingDD'+o);
     if(o.next(":visible").length>0){
-        console.log('binding document togglingDD');
+        o.bind('reset',null, function(e){var o =$(this);var val=o.siblings(":hidden:last").val();o.siblings(":hidden").val(val);o.text(val)});
+        o.next().children().bind('mouseover',null,mouse_in_out).bind('mouseout',null,mouse_in_out).bind('click',null,clickDDI);
         o.next().add(o).bind('mouseout', null, 
             function(e){
                 $(document).one('click',null, function(e){toggleDD(obj)});
@@ -26,9 +26,3 @@ clickDDI=function(event){
     par.prev().text(o.text());
     toggleDD(par.prev());
 }
-
-$(document).ready(function(){
-    $("div.custom_drop_down_box").children().bind('mouseover',null,mouse_in_out).bind('mouseout',null,mouse_in_out).bind('click',null,clickDDI);
-    $("div.custom_drop_down").bind('reset',null, function(e){var o =$(this);var val=o.siblings(":hidden:last").val();o.siblings(":hidden").val(val);o.text(val)});
-
-})

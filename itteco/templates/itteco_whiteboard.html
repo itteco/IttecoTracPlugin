@@ -59,10 +59,10 @@
             <div class="wb-panel-section" id="wb-section2">
                 <strong>Team:</strong> / Selected: <span class="active_filter">All</span>
                 <ul>
-                    <li class="item-droppable" py:for="member in team" status="assigned">
-                        <a href="#" owner="${member}">${member}</a></li><br/>
-                    <li class="${authname!='anonymous' and 'item-droppable' or ''}" status="assigned"><a href="#" owner="${authname}">Me</a></li>
-                    <li><a href="#" owner="">All</a></li>
+                    <li class="item-droppable" py:for="member in team" status="assigned" owner="${member}">
+                        <a href="#">${member}</a></li><br/>
+                    <li class="${authname!='anonymous' and 'item-droppable' or ''}" status="assigned" owner="${authname}"><a href="#">Me</a></li>
+                    <li owner=""><a href="#">All</a></li>
                 </ul>
             </div>
            

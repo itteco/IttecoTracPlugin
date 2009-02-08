@@ -69,7 +69,6 @@ colorizeWidget=function(widget){
             c+=Math.round(l+(h-l)*(val/max_val));
         }
         c+=")";
-        console.log('c='+c);
         widget.css('background-color',c);
     }
 }    
@@ -125,7 +124,7 @@ save_ticket = function(form){
 defaultPrepare =function(ticket, target) {
     var idx = ticket.attr('idx');
     var data = {'ticket':idx};
-    
+   
     var action = getActionToPerform(target.attr('status'), ticket.attr('status'));
     if (action){
         data['tkt_action']=action;
@@ -140,9 +139,10 @@ defaultPrepare =function(ticket, target) {
 teamMemberPrepare=function(ticket, member) {
     var idx = ticket.attr('idx');
     var data = {'ticket':idx, 'tkt_action':'reassign',
-         'owner': member.text(),
-         'action_reassign_reassign_owner':member.text()};
+         'owner': member.attr('owner'),
+         'action_reassign_reassign_owner':member.attr('owner')};
     var newTarget = ticket.parent().siblings('td[action]').andSelf().filter('[action="reassign"]')
+    update_cell(ticket.parent(), idx);
     var copy = ticket.remove().draggable(draggable_options);
     newTarget.append(copy);
     return {'ticket': copy, 'data':data};
@@ -205,7 +205,7 @@ acceptByTeamMember = function(draggable){
 }
 filterTicketsByOwner = function(){
     var o = $(this);
-    var owner = o.attr('owner');
+    var owner = o.parent().attr('owner');
     if(owner!=''){
         $(".draggable").each(function(i){if ($("[field_name='owner']", this).text()==owner) {$(this).show();}else{$(this).hide();}} );
     }else{
@@ -256,7 +256,7 @@ $(document).ready(function(){
     $('a',$('#wb-section2')).bind('click', filterTicketsByOwner)
     $("a", $("#wb-section3")).attr("href", function(i){return $(this).attr("href")+document.location.search;});
     calcAllAggregates();
-    $(".item-droppable", $("#wb-section2")).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});   
+    $(".item-droppable", $("#wb-section2")).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});
     $(".draggable").draggable(draggable_options);
     $(".widget").each(function(i){colorizeWidget($(this))});
     $('#wb-error-panel').ajaxError(function(event, request, settings){

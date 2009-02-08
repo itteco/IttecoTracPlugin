@@ -45,7 +45,7 @@ class SelectionTicketGroupStatsProvider(Component):
         if total_cnt:
             cursor = self.env.get_db_cnx().cursor()
             str_ids = [str(x) for x in sorted(ticket_ids)]
-            cursor.execute("SELECT status, sum(cast(tc.value as int)) FROM ticket t LEFT OUTER JOIN ticket_custom tc ON t.id=tc.ticket AND tc.name=%%s "
+            cursor.execute("SELECT status, sum(cast('0'||tc.value as int)) FROM ticket t LEFT OUTER JOIN ticket_custom tc ON t.id=tc.ticket AND tc.name=%%s "
                            "WHERE id IN (%s) GROUP BY status" % ("%s,"*len(str_ids))[:-1], [field_name,]+str_ids)
             for s, cnt in cursor:
                 status_cnt[s] = cnt
