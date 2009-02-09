@@ -199,6 +199,7 @@ class DashboardModule(Component):
             'milestone': milestone,
             'table_title': _('User story\Ticket status'),
             'progress_field': field,
+            'types': [ticket.name for ticket in Type.select(self.env)],
             'row_head_renderer':'itteco_ticket_widget.html'})
             
         max_story_weight = self._get_max_weight(self.user_story_weight_field)
@@ -338,7 +339,7 @@ class DashboardModule(Component):
         if '' in mils:
             mils +=[None]
         tkts_info = get_tickets_for_milestones(db,  mils, self._get_all_requested_fields(), types)
-        if resolve_links:
+        if resolve_links and tkts_info:
             tkts_dict =dict([t['id'], t] for t in tkts_info)
             src_ids = tkts_dict.keys()
             cursor = db.cursor()

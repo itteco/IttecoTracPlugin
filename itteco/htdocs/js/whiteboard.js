@@ -1,5 +1,5 @@
 var draggable_options ={helper: 'clone', handle: '.drag_handle', opacity: 0.8, 'start' : function(e, ui){ui.helper.css('width',this.offsetWidth+'px');}};
-
+var wbContext = {filter: {field: new Object(), attr: new Object()}};
 update_cell = function(cell, ignore_id){
     var row_stat = cell.siblings('.group_holder');
     var group_filter ="[status='"+ cell.attr('status')+"']";
@@ -203,17 +203,39 @@ acceptByTeamMember = function(draggable){
     if (typeof(group_cfg) == 'undefined') return false;
     return  group_cfg['src_statuses'][status];
 }
-filterTicketsByOwner = function(){
+filterTicketsByField = function(e){
     var o = $(this);
-    var owner = o.parent().attr('owner');
-    if(owner!=''){
-        $(".draggable").each(function(i){if ($("[field_name='owner']", this).text()==owner) {$(this).show();}else{$(this).hide();}} );
+    var field = o.parent().parent().attr('filter_field');
+    wbContext.filter.field[field]=o.parent().attr(field);
+    $(".active_filter", o.parents(".wb-panel-section").add(e.data.selector)).text(o.text());
+    filterTickets();
+}
+
+filterTicketsByAttr = function(){
+    var o = $(this);
+    var attr_name = o.parent().parent().attr('filter_attr');
+    wbContext.filter.attr[attr_name]=o.parent().attr(attr_name);
+    $(".active_filter", o.parents(".wb-panel-section")).text(o.text());
+    filterTickets();
+}
+filterTickets = function(){
+    var sel ="";
+    var attrs = wbContext.filter['attr'];
+    for (var a in attrs){
+      if (attrs[a]) sel +='['+a+'="'+attrs[a]+'"]';
+    }	
+    var fields = wbContext.filter['field'];
+    for (var f in fields){
+      if (fields[f]) sel +=':has([field_name="'+f+'"]:contains("'+fields[f]+'"))';       
+    }
+    if(sel!=""){
+      $(".draggable").filter(sel).show();
+      $(".draggable").not(sel).hide();
     }else{
-        $(".draggable").show();
+      $(".draggable").show();
     }
     calcAllAggregates();
-    $(".active_filter", o.parents(".wb-panel-section").add("#wb-section-info-members")).text(o.text());
-}    
+}
 enableAllAccordions = function(){
     $(".accordion_support").each(function(i){enableAccordionIfAny(this);});  
 }
@@ -252,8 +274,8 @@ make_droppable = function(obj, acceptCheck, prepare, postprocess){
 
 $(document).ready(function(){
     enableAllAccordions();
-    $("#wb-tabs > li:has(a.active)").addClass("active");
-    $('a',$('#wb-section2')).bind('click', filterTicketsByOwner)
+    $('a',$('#wb-section2')).bind('click', {selector:'#wb-section-info-members'}, filterTicketsByField);
+    $('a',$('#wb-section4')).bind('click', filterTicketsByAttr);
     $("a", $("#wb-section3")).attr("href", function(i){return $(this).attr("href")+document.location.search;});
     calcAllAggregates();
     $(".item-droppable", $("#wb-section2")).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});

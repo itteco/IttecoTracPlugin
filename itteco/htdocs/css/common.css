@@ -485,8 +485,8 @@ table.whiteboard_table tbody tr.odd td {
 /* ---------------------------------------------------------------------------------------- */
 
 #whiteboard {
-	padding-top: 10px;
-	padding-bottom: 50px;
+	padding-top: 5px;
+	padding-bottom: 5px;
 }
 
 /* STATUS TEXT */
@@ -521,26 +521,12 @@ table.whiteboard_table tbody tr.odd td {
 	list-style-position: outside;
 	list-style-type: none;
 }
-#wb-tabs :link:hover, #wb-tabs :visited:hover {
-	background: transparent none repeat scroll 0 0;
-	color: #333333;
-}
-#wb-tabs :link, #wb-tabs :visited {
-	border: medium none;
-	color: #999999;
-}
-#wb-tabs li.active {
-	background:#FFFFFF none repeat scroll 0 0;
-	border-bottom:1px solid #FFFFFF;
-}
-
 /* PANEL */
 #wb-panel {
 	background:transparent url(./../images/vgradient.png) repeat-x scroll 0 1px;
 	border-top:1px solid #CCCCCC;
 	clear:left;
-	padding: 15px 5px 5px 5px;
-	min-height: 30px;
+	padding: 5px 5px 5px 5px;
 	overflow: auto;
 	width: 100%;
 }
@@ -556,15 +542,19 @@ table.whiteboard_table tbody tr.odd td {
 	padding: 0 25px 0 0;
 	margin: 0;
 }
+#wb-section-info-view{
+	display: inline-block;
+	padding: 3px 10px 3px 10px;
+}
 #wb-section-info-members {
 	display: inline-block;
-	padding-right: 20px;
-	padding: 3px 20px 3px 0;
+	background: url(./../images/wb-section-info-divider.png) no-repeat left top;
+	padding: 3px 13px 3px 18px;
 }
 #wb-section-info-milestone {
 	display: inline-block;
 	background: url(./../images/wb-section-info-divider.png) no-repeat left top;
-	padding: 3px 0 3px 23px;
+	padding: 3px 0 3px 18px;
 }
 #wb-section-info-milestone .link-expanded, #wb-section-info-milestone .link-collapsed {
 	margin-left: 4px;
@@ -610,6 +600,7 @@ table.whiteboard_table tbody tr.odd td {
 
 
 .wb-panel-section {
+	padding: 0 15px 0 0;
 	float: left;
 }
 
@@ -622,8 +613,8 @@ table.whiteboard_table tbody tr.odd td {
 }
 
 #wb-section1 {
-	width: 225px;
-	padding: 40px 30px 0 15px;
+	width: 200px;
+	padding: 40px 25px 0 5px;
 	background: url(./../images/wb-section1-border.png) right top no-repeat;
 }
 #wb-section1 p {
@@ -633,24 +624,17 @@ table.whiteboard_table tbody tr.odd td {
 	line-height: 115%;
 	margin: 0;
 	padding: 0;
-	padding-left: 30px;	
+	padding-left: 15px;	
 	padding-bottom: 10px;
 }
 
-
-#wb-section2, #wb-section3 {
-	padding: 0 30px;
-}
-
-
-
-#wb-section2 ul {
+#wb-section2 ul, #wb-section4 ul {
 	margin: 0;
 	padding: 0;
 	padding-top: 5px;
 	list-style: none;
 }
-#wb-section2 li {
+#wb-section2 li, #wb-section4 li {
 	margin: 0;
 	padding: 3px 0 3px 16px;
 	background: url(./../images/wb-list-bullet.png) no-repeat 4px 8px;
@@ -698,7 +682,7 @@ table.whiteboard_table tbody tr.odd td {
 
 
 #wb-section3 {
-	padding: 0 30px;
+	padding: 0 15px;
 }
 
 

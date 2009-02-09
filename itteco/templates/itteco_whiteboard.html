@@ -5,7 +5,7 @@
   <xi:include href="layout.html" />
   <xi:include href="itteco_whiteboard_utils.html" />
  <head>
-  <title>Whiteboard - ${board_type_title} - Milestone: ${milestone and milestone.name or 'Not Selected'}</title>
+  <title>Milestone: ${milestone and milestone.name or 'Not Selected'} - ${board_type_title} - Whiteboard</title>
     <link rel="stylesheet" type="text/css" href="${chrome.htdocs_location}css/roadmap.css" />
     <link rel="stylesheet" type="text/css" href="${chrome.htdocs_location}../itteco/css/common.css" />
     <script src="${chrome.htdocs_location}../itteco/js/jquery.ui/ui.core.js"/>
@@ -21,24 +21,24 @@
   <!-- WHITEBOARD -->
   <div id="whiteboard">
     <div id="wb-error-panel"></div>
-    <!-- TABS -->
-    <ul id="wb-tabs" py:if="whitebord_ctxtnav">
-      <li py:for="i, elm in enumerate(whitebord_ctxtnav)">$elm</li>
-    </ul>
     <!-- PANEL -->
     <div id="wb-panel">
     
        	<div id="wb-panel-button" onclick="$('#wb-sections, #wb-section-info').add($(this).children()).toggle(); return false;">
             <span>
                 <a href="#" class="link-collapsed">&nbsp;</a>
-                <a href="#">Expand Team/Milestones panel</a>
+                <a href="#">Expand Control Panel</a>
             </span>
             <span style="display:none">
                 <a href="#" class="link-expanded">&nbsp;</a>
-                <a href="#">Collapse Team/Milestones panel</a>
+                <a href="#">Collapse Control Panel</a>
             </span>
-        </div>    
+        </div>
+
         <div id="wb-section-info">
+            <span id="wb-section-info-view">
+                <strong>View:</strong>${board_type_title}
+            </span>
 	        <span id="wb-section-info-members">
 	            <strong>Team:</strong> ${team and len(team) or 0} member(s) / Selected: <span class="active_filter">All</span>
             </span>
@@ -55,10 +55,16 @@
                 <p>Tickets can be assigned to <span class="green">green items</span> only.</p>
                 <p>Click to milestone to display assigned tickets.</p>
             </div>
-    
+            <div class="wb-panel-section" py:if="whitebord_ctxtnav">
+                <strong>View:</strong>${board_type_title}
+                <ul>
+                    <li py:for="i, elm in enumerate(whitebord_ctxtnav)">$elm</li>
+                </ul>
+            </div>
+  
             <div class="wb-panel-section" id="wb-section2">
                 <strong>Team:</strong> / Selected: <span class="active_filter">All</span>
-                <ul>
+                <ul filter_field="owner">
                     <li class="item-droppable" py:for="member in team" status="assigned" owner="${member}">
                         <a href="#">${member}</a></li><br/>
                     <li class="${authname!='anonymous' and 'item-droppable' or ''}" status="assigned" owner="${authname}"><a href="#">Me</a></li>
@@ -70,6 +76,15 @@
                 <strong>Milestone:</strong> <span id="milestones-selected">${(milestone and isinstance(milestone, list) and ", ".join(milestone))or 'Backlog (no milestone)'}</span>
                 ${render_milestones(milestones, 0)}
             </div>
+
+            <div class="wb-panel-section" id="wb-section4" py:if="types">
+                <strong>Ticket Types:</strong><span class="active_filter">All</span>
+                <ul filter_attr="ticket_type">
+                    <li py:for="type in types" ticket_type="$type"><a href="#">$type</a></li><br/>
+                    <li ticket_type=""><a href="#">All</a></li>
+                </ul>
+            </div>
+
 		</div>        	
     </div> 
     <!-- BOARD -->
@@ -84,11 +99,11 @@
               	<span class="th-label">${table_title}</span>
               </th>
               <th py:for="idx, group in enumerate(groups)" class="group calculated ${idx % 2 and 'group_odd' or 'group_even'}" status="${group.name}">
-                  <div class="summary">
-                    <div class='parameter'>
-                      <span class='parameter_name'>Sum ${progress_field.label}:</span> <span class='parameter_value' field_name="${progress_field.name}"></span>
-                    </div>
-                  </div>
+                  <span class="summary">
+                    <span class='parameter'>
+                      <span class='parameter_name'>${progress_field.label}:</span> <span class='parameter_value' field_name="${progress_field.name}"></span>
+                    </span>
+                  </span>
                   <span class="th-label">${group.name}</span>
               </th>
             </tr>
