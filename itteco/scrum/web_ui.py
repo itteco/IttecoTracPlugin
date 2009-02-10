@@ -5,6 +5,7 @@ from genshi.filters.transform import Transformer
 
 from trac.core import Component, implements, TracError
 from trac.config import Option, ListOption
+from trac.ticket.roadmap import apply_ticket_permissions
 from trac.ticket.api import TicketSystem
 from trac.ticket.model import Ticket, Resolution, Type, Milestone
 from trac.ticket.web_ui import TicketModule
@@ -218,7 +219,7 @@ class DashboardModule(Component):
             self._add_rendering_properties(ticket['type'], self.task_weight_field, max_task_weight, tkt_dict)
             user_stories[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        for tkt_info in self._get_ticket_info(milestone, resolve_links=True):
+        for tkt_info in self._get_ticket_info(milestone, req=req, resolve_links=True):
             if tkt_info['type']==self.user_story_ticket_type:
                 sid = tkt_info['id']
                 user_stories.setdefault(sid, self._get_empty_group())['story']=tkt_info
@@ -269,7 +270,7 @@ class DashboardModule(Component):
             self._add_rendering_properties(ticket['type'], self.user_story_weight_field, max_story_weight, tkt_dict)
             user_stories[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        for tkt_info in self._get_ticket_info(milestone, self.user_story_ticket_type):
+        for tkt_info in self._get_ticket_info(milestone, self.user_story_ticket_type, req):
             tkt_group = self._get_ticket_group(tkt_info)
             append_ticket(tkt_info, tkt_group, tkt_info['milestone'])
             
@@ -333,12 +334,13 @@ class DashboardModule(Component):
         db.commit()
         req.write('(%s)' % json.write(data))
         
-    def _get_ticket_info(self, milestones, types= None, resolve_links=True):
+    def _get_ticket_info(self, milestones, types= None, req=None, resolve_links=True):
         db = self.env.get_db_cnx()
         mils = isinstance(milestones, basestring) and [milestones] or list(milestones)
         if '' in mils:
             mils +=[None]
         tkts_info = get_tickets_for_milestones(db,  mils, self._get_all_requested_fields(), types)
+        tkts_info = apply_ticket_permissions(self.env, req, tkts_info)
         if resolve_links and tkts_info:
             tkts_dict =dict([t['id'], t] for t in tkts_info)
             src_ids = tkts_dict.keys()
@@ -349,6 +351,7 @@ class DashboardModule(Component):
                 links_dict.setdefault(dest, []).append(src)
             if links_dict:
                 linked_infos = get_tickets_by_ids(db, self._get_all_requested_fields(), links_dict.keys())
+                linked_infos = apply_ticket_permissions(self.env, req, linked_infos)
                 for linked_info in linked_infos:
                     referers = links_dict[linked_info['id']]
                     if referers:

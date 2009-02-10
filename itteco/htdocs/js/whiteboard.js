@@ -47,16 +47,9 @@ getAggregatesValues=function(field_name, scope){
         });
     return {'sum': sum, 'full_stats':stats};
 }
-getProgressbarContext=function(widget){
-    var vh = $(".parameter_value[field_name='"+window.progress_field_name+"']", widget);
-    return { 'handler' : $('.progress', widget).parent(), 
-             'overall_completion': 0, 
-             'sum': parseInt(vh.attr('sum')),
-             'estimate' : parseInt(vh.text()),
-             'full_stats' : vh.attr('full_stats')}
-}
 colorizeWidget=function(widget){
     var val = parseInt($(".summary .parameter_value[field_name='"+widget.attr('weight_field_name')+"']", widget).text());
+    val = isNaN(val) ? 0 : val;
     var max_val = parseInt(widget.attr('max_weight'));
     var min_color = widget.attr('min_color');
     var max_color = widget.attr('max_color');
@@ -72,6 +65,14 @@ colorizeWidget=function(widget){
         widget.css('background-color',c);
     }
 }    
+getProgressbarContext=function(widget){
+    var vh = $(".parameter_value[field_name='"+window.progress_field_name+"']", widget);
+    return { 'handler' : $('.progress', widget).parent(), 
+             'overall_completion': 0, 
+             'sum': parseInt(vh.attr('sum')),
+             'estimate' : parseInt(vh.text()),
+             'full_stats' : vh.attr('full_stats')}
+}
 setupProgressbar=function(widget){
     var ctx = getProgressbarContext(widget);
     if(ctx.sum){
@@ -109,7 +110,42 @@ setupProgressbar=function(widget){
         ctx.handler.hide();
     }
 }
-
+//Row collapse/expand function
+collapseAllRows=function(){
+    $("th .widget",$('#whiteboard_table')).each(function(){collapseRow($(this))});
+}
+collapseRow=function(head_widget){
+    $(".body", head_widget).hide();
+    $(".widget", head_widget.parent().siblings()).each(function(i){
+        var o=$(this); 
+        o.addClass("tiny_widget");
+        $(".body, .title > span", o).hide();
+        $(".drag_handle", o).unbind('click');
+    });
+}
+expandAllRows=function(){
+    $("th .widget",$('#whiteboard_table')).each(function(){expandRow($(this))});
+}
+expandRow=function(head_widget){
+    $(".body", head_widget).show();
+    head_widget.parent().siblings().each(function(i){
+        var c = $(this);
+        $(".draggable", c).each(function(i){
+            var o=$(this); 
+            o.removeClass("tiny_widget");
+            $(".body, .title > span", o).show();
+        });
+        enableAccordionIfAny(c);
+    });
+}
+toggleRowCollapse=function(head_widget){
+    var expanded = $(".body:visible", head_widget).length>0;
+    if (expanded){
+        collapseRow(head_widget);
+    }else{
+        expandRow(head_widget);
+    }
+}
 change_ticket_view=function(ticket, view){
     $("div.block", ticket).addClass('hidden');
     $('div.'+view, ticket).removeClass('hidden');
@@ -251,13 +287,14 @@ putIntoAccordion = function(ticket){
 }
 removeFromAccordion = function(ticket){
     $(".drag_handle", ticket).unbind('click');
-    $('.body', t).removeClass('hidden');
+    $('.body', t).show();
 }
 activateAccordionElement = function(handle){
     var h = $(handle)
     var t = h.hasClass('widget') ? h : h.parent();
-    $('.body', t.siblings()).addClass('hidden');
-    $('.body', t).removeClass('hidden');
+    $('.body', t.siblings()).hide();
+    t.removeClass("tiny_widget");
+    $('.body', t).show();
     change_ticket_view(t,'summary');
 }
 
@@ -276,6 +313,10 @@ $(document).ready(function(){
     enableAllAccordions();
     $('a',$('#wb-section2')).bind('click', {selector:'#wb-section-info-members'}, filterTicketsByField);
     $('a',$('#wb-section4')).bind('click', filterTicketsByAttr);
+    //expand collapse rows
+    $("th .widget .title",$('#whiteboard_table')).bind('click', function(){toggleRowCollapse($(this).parent())});
+    $("th.first-item",$('#whiteboard_table')).bind('click', function(){var o=$(this);o.toggleClass('active');if(o.hasClass('active')){expandAllRows()}else{collapseAllRows()};});    
+    //fix navigation
     $("a", $("#wb-section3")).attr("href", function(i){return $(this).attr("href")+document.location.search;});
     calcAllAggregates();
     $(".item-droppable", $("#wb-section2")).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});

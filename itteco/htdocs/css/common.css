@@ -195,7 +195,11 @@ table.whiteboard_table tbody tr.odd td {
 	color: #56562b;
 	
 }
-
+.tiny_widget{
+    float: left;
+    width: 50px !IMPORTANT;
+    padding: 3px;
+}
 
 .widget .summary {
 	

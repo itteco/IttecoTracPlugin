@@ -5,8 +5,8 @@
     
     <xi:include href="itteco_whiteboard_utils.html" />
               
-    <div id="ticket_${obj.id}" py:with="editable= 'TICKET_APPEND' in perm(obj.id) or 'TICKET_CHGPROP' in perm(obj.id) or False"
-        py:if="'TICKET_VIEW' in perm(obj.id)"
+    <div id="ticket_${obj.id}" py:with="editable= 'TICKET_APPEND' in perm('ticket', obj.id) or 'TICKET_CHGPROP' in perm('ticket', obj.id) or False"
+        py:if="'TICKET_VIEW' in perm('ticket', obj.id)"
         class="widget ${(cfg.draggable and editable) and 'draggable' or ''}" status="${obj.status}" idx="${obj.id}"
         weight_field_name="$cfg.weight_field_name"
         max_weight="$cfg.max_weight"
@@ -16,7 +16,7 @@
         <div class="title drag_handle">
             <!-- ICON -->
             <div class="status-icon" style="background-color: ${cfg.icon_bg_color or '#090'}; color:#FFF">${cfg.icon_text}</div>
-            <a href="${href.ticket(obj.id)}" py:if="obj.id">#${obj.id}</a> ${obj.summary}
+            <a href="${href.ticket(obj.id)}" py:if="obj.id">#${obj.id}</a><span>${obj.summary}</span>
         </div>
         <div class="body">
           <div class="block summary" py:if="obj.id">
