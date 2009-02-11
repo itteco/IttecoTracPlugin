@@ -1,11 +1,11 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:py="http://genshi.edgewall.org/"
-      xmlns:xi="http://www.w3.org/2001/XInclude">
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:with="current_mil_level= milestone_levels and [mil.name for mil in milestone_levels if mil.selected]">
   <xi:include href="layout.html" />
   <xi:include href="itteco_whiteboard_utils.html" />
  <head>
-  <title>Milestone: ${milestone and milestone.name or 'Not Selected'} - ${board_type_title} - Whiteboard</title>
+  <title>Milestone: ${current_mil_level or (milestone and milestone.name or 'Not Selected')} - ${board_type_title} - Whiteboard</title>
     <link rel="stylesheet" type="text/css" href="${chrome.htdocs_location}css/roadmap.css" />
     <link rel="stylesheet" type="text/css" href="${chrome.htdocs_location}../itteco/css/common.css" />
     <script src="${chrome.htdocs_location}../itteco/js/jquery.ui/ui.core.js"/>
@@ -42,6 +42,9 @@
 	        <span id="wb-section-info-members">
 	            <strong>Team:</strong> ${team and len(team) or 0} member(s) / Selected: <span class="active_filter">All</span>
             </span>
+            <span id="wb-section-info-levels" py:if="milestone_levels">
+            	<strong>Level:</strong> $current_mil_level
+            </span>
             <span id="wb-section-info-milestone" py:if="board_type!='stories'">
             	<strong>Milestone:</strong> <a href="#">${(milestone and isinstance(milestone, list) and ", ".join(milestone) or milestone) or 'Backlog (no milestone)'}</a>
             </span>
@@ -56,7 +59,7 @@
                 <p>Click to milestone to display assigned tickets.</p>
             </div>
             <div class="wb-panel-section" py:if="whitebord_ctxtnav">
-                <strong>View:</strong>${board_type_title}
+                <strong>View:</strong> ${board_type_title}
                 <ul>
                     <li py:for="i, elm in enumerate(whitebord_ctxtnav)">$elm</li>
                 </ul>
@@ -71,7 +74,18 @@
                     <li owner=""><a href="#">All</a></li>
                 </ul>
             </div>
-           
+
+            <div class="wb-panel-section" id="wb-section-levels" py:if="milestone_levels">
+                <strong>Level:</strong> $current_mil_level
+                <form id="mil_level_form">
+                <ul>
+                    <li py:for="i, level in enumerate(milestone_levels)">
+                        <input id="mil_level_$i" type="radio" name="mil_level" value="${level.name}" checked="${level.selected and 'selected' or None}" onchange="$('#mil_level_form').submit();"/>
+                        <label for="mil_level_$i">${level.name}</label></li>
+                </ul>
+                </form>
+            </div>
+            
             <div class="wb-panel-section" id="wb-section3" py:if="board_type!='stories'">
                 <strong>Milestone:</strong> <span id="milestones-selected">${(milestone and isinstance(milestone, list) and ", ".join(milestone))or 'Backlog (no milestone)'}</span>
                 ${render_milestones(milestones, 0)}

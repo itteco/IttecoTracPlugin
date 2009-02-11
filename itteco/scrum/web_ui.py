@@ -19,6 +19,7 @@ from trac.util.datefmt import utc, to_timestamp
 from trac.web.api import IRequestHandler, ITemplateStreamFilter
 from trac.web.chrome import INavigationContributor, add_script
 
+from itteco.init import IttecoEvnSetup
 from itteco.ticket.model import StructuredMilestone, TicketLinks
 from itteco.ticket.utils import get_tickets_for_milestones, get_tickets_by_ids
 from itteco.utils import json
@@ -33,12 +34,6 @@ def add_whiteboard_ctxtnav(data, elm_or_label, href=None, **kwargs):
         elm = elm_or_label
     data.setdefault('whitebord_ctxtnav', []).append(elm)
     
-def tree_iteraror(roots, kids_attr='kids'):
-    for root in roots:
-        yield root
-        for kid in tree_iteraror(getattr(root, kids_attr, []), kids_attr):
-            yield kid
-
 class dummy:
     summary='Not assigned to any story'
     status=id=name=None
@@ -47,6 +42,9 @@ class dummy:
 
 class DashboardModule(Component):
     implements(INavigationContributor, IRequestHandler, ITemplateStreamFilter)
+    
+    default_milestone_level = Option('itteco-whiteboard-config', 'default_milestone_level','Sprint',
+        "The milestone level selected on storyboard by default.")
 
     user_story_weight_field = Option('itteco-whiteboard-tickets-config', 'user_story_weight_field', 'business_value',
         "The ticket field that would be used for user story weight calculation")
@@ -242,25 +240,35 @@ class DashboardModule(Component):
             
     def _add_storyboard_data(self, req, data):
         add_script(req, 'itteco/js/storyboard.js')
-        milestone = self._resolve_milestone('not_completed_milestones')
+        
+        selected_mil_level = req.args.get('mil_level',self.default_milestone_level)
+        mils, mils_dict = self._get_milestones_by_level(selected_mil_level)
+        milestone = mils_dict.keys()
         milestone.insert(0,'')
-        mils = StructuredMilestone.select(self.env, False)
+
         dummy_mil = dummy()
         dummy_mil.name=dummy_mil.summary = ''
         field = self._get_ticket_fields(self.user_story_weight_field)
         field = field and field[0] or self.task_weight_field
-
+        
         data.update({'milestones' : mils,            
             'milestone': milestone,
+            'milestone_levels': [{'name': name, 'selected': name==selected_mil_level} for name in IttecoEvnSetup(self.env).milestone_levels],
             'table_title': _('Milestone\User story status'),
             'progress_field':  field,
-            'row_items_iterator': tree_iteraror([dummy_mil,]+mils),
+            'row_items_iterator': mils+[dummy_mil],
             'row_head_renderer':'itteco_milestone_widget.html'})
 
         max_story_weight = self._get_max_weight(self.user_story_weight_field)
         
         milestone_sum_fields=self._get_ticket_fields(self.milestone_summary_fields)
-        user_stories = dict()        
+        user_stories = dict()
+        print mils_dict.keys()
+        def get_root_milestone(mil):
+            m = mils_dict.get(mil)
+            while m and m.level['label']!=selected_mil_level and m.parent:
+                m = mils_dict.get(m.parent)
+            return m and m.name or ''
         def append_ticket(ticket, tkt_group, group_name):
             id = group_name or None
             if not user_stories.has_key(id):
@@ -272,12 +280,32 @@ class DashboardModule(Component):
             
         for tkt_info in self._get_ticket_info(milestone, self.user_story_ticket_type, req):
             tkt_group = self._get_ticket_group(tkt_info)
-            append_ticket(tkt_info, tkt_group, tkt_info['milestone'])
+            append_ticket(tkt_info, tkt_group, get_root_milestone(tkt_info['milestone']))
             
         for mil in milestone:
             if not user_stories.has_key(mil):
                 user_stories[mil] = {'fields':milestone_sum_fields}
         data['stories'] = user_stories
+    
+    def _get_milestones_by_level(self, level_name):
+        mils =[]
+        mils_dict={}
+        def filter_mils(mil):
+            mils_dict[mil.name] = mil
+            if mil.level['label']==level_name:
+                if not mil.is_completed:
+                    mils.append(mil)
+                    for kid in mil.kids:
+                        filter_mils(kid)
+            else:
+                for kid in mil.kids:
+                    filter_mils(kid)
+                
+        mils_tree = StructuredMilestone.select(self.env, True)
+        for mil in mils_tree:
+            filter_mils(mil)
+            
+        return (mils, mils_dict)
         
     def _resolve_milestone(self, name):
         if name=='nearest':

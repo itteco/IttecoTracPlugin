@@ -632,7 +632,7 @@ table.whiteboard_table tbody tr.odd td {
 	padding-bottom: 10px;
 }
 
-#wb-section2 ul, #wb-section4 ul {
+#wb-section2 ul, #wb-section4 ul, #wb-section-levels ul {
 	margin: 0;
 	padding: 0;
 	padding-top: 5px;
@@ -679,6 +679,9 @@ table.whiteboard_table tbody tr.odd td {
 	padding-left: 5px;
 }
 
+#wb-section-levels  li {
+	list-style: none;
+}
 #black_hole {
 	display: inline-block;
 	padding: 3px 2px 1px 2px;	
