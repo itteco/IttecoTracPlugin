@@ -290,16 +290,16 @@ class DashboardModule(Component):
     def _get_milestones_by_level(self, level_name):
         mils =[]
         mils_dict={}
-        def filter_mils(mil):
+        def filter_mils(mil, force_add=False):
             mils_dict[mil.name] = mil
             if mil.level['label']==level_name:
                 if not mil.is_completed:
                     mils.append(mil)
                     for kid in mil.kids:
-                        filter_mils(kid)
+                        filter_mils(kid, True)
             else:
                 for kid in mil.kids:
-                    filter_mils(kid)
+                    filter_mils(kid, force_add)
                 
         mils_tree = StructuredMilestone.select(self.env, True)
         for mil in mils_tree:
