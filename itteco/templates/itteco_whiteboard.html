@@ -37,7 +37,7 @@
 
         <div id="wb-section-info">
             <span id="wb-section-info-view">
-                <strong>View:</strong>${board_type_title}
+                <strong>View:</strong> <span class="active_filter">${board_type_title}</span>
             </span>
 	        <span id="wb-section-info-members">
 	            <strong>Team:</strong> ${team and len(team) or 0} member(s) / Selected: <span class="active_filter">All</span>
@@ -46,7 +46,7 @@
             	<strong>Level:</strong> $current_mil_level
             </span>
             <span id="wb-section-info-milestone" py:if="board_type!='stories'">
-            	<strong>Milestone:</strong> <a href="#">${(milestone and isinstance(milestone, list) and ", ".join(milestone) or milestone) or 'Backlog (no milestone)'}</a>
+            	<strong>Milestone:</strong> <a href="#"> ${(milestone and isinstance(milestone, list) and ", ".join(milestone) or milestone) or 'Backlog (no milestone)'}</a>
             </span>
         </div>
         
@@ -57,9 +57,10 @@
                 <p>Drag ticket to assign team member or milestone.</p>
                 <p>Tickets can be assigned to <span class="green">green items</span> only.</p>
                 <p>Click to milestone to display assigned tickets.</p>
+                <p>Click on a team member or ticket type to filter displayed tickets.</p>
             </div>
             <div class="wb-panel-section" py:if="whitebord_ctxtnav">
-                <strong>View:</strong> ${board_type_title}
+                <strong>View:</strong> <span class="active_filter">${board_type_title}</span>
                 <ul>
                     <li py:for="i, elm in enumerate(whitebord_ctxtnav)">$elm</li>
                 </ul>
@@ -92,7 +93,7 @@
             </div>
 
             <div class="wb-panel-section" id="wb-section4" py:if="types">
-                <strong>Ticket Types:</strong><span class="active_filter">All</span>
+                <strong>Ticket Types:</strong> <span class="active_filter">All</span>
                 <ul filter_attr="ticket_type">
                     <li py:for="type in types" ticket_type="$type"><a href="#">$type</a></li><br/>
                     <li ticket_type=""><a href="#">All</a></li>
@@ -140,5 +141,6 @@
     <p id="wb-status">Progress bars consider <strong>${progress_field['label']}</strong> progress.</p>
 
   </div>
+  <div id="dyn_hint"/>
  </body>
 </html>

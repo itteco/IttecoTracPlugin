@@ -197,9 +197,18 @@ table.whiteboard_table tbody tr.odd td {
 }
 .tiny_widget{
     float: left;
-    width: 50px !IMPORTANT;
-    padding: 3px;
+    width: 55px !IMPORTANT;
+    margin-right: 3px;
 }
+#dyn_hint{
+    display:none;
+	position:absolute;
+	background:#ffd;
+	border:1px solid #884;
+	color:#884;
+	padding:5px;
+}
+
 
 .widget .summary {
 	
@@ -216,6 +225,7 @@ table.whiteboard_table tbody tr.odd td {
 	color: #bb0000;
 	border-bottom: 1px dotted #bb0000;
 	background: none;
+    padding-right: 3px;
 }
 
 .widget .title a:hover {
@@ -712,7 +722,7 @@ table.whiteboard_table tbody tr.odd td {
 }
 
 
-#milestones-selected {
+#milestones-selected, .active_filter {
 	font-style: italic;
 	color: #8f8f8f;
 }

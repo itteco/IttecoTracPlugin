@@ -119,6 +119,11 @@ collapseRow=function(head_widget){
     $(".widget", head_widget.parent().siblings()).each(function(i){
         var o=$(this); 
         o.addClass("tiny_widget");
+        o.bind("mouseover",function(e){
+            console.log("mouseover:"+this);
+            $("#dyn_hint").text($(".title span", o).text()).show().css({"display":"block","left":e.pageX+"px", "top":e.pageY+25+"px"}).appendTo(document);
+            $(this).one("mouseout", function(e){console.log("mouseout:"+this);$("#dyn_hint").hide();});
+        });
         $(".body, .title > span", o).hide();
         $(".drag_handle", o).unbind('click');
     });
@@ -133,6 +138,7 @@ expandRow=function(head_widget){
         $(".draggable", c).each(function(i){
             var o=$(this); 
             o.removeClass("tiny_widget");
+            o.unbind("mouseover");
             $(".body, .title > span", o).show();
         });
         enableAccordionIfAny(c);
