@@ -120,9 +120,8 @@ collapseRow=function(head_widget){
         var o=$(this); 
         o.addClass("tiny_widget");
         o.bind("mouseover",function(e){
-            console.log("mouseover:"+this);
             $("#dyn_hint").text($(".title span", o).text()).show().css({"display":"block","left":e.pageX+"px", "top":e.pageY+25+"px"}).appendTo(document);
-            $(this).one("mouseout", function(e){console.log("mouseout:"+this);$("#dyn_hint").hide();});
+            $(this).one("mouseout", function(e){$("#dyn_hint").hide();});
         });
         $(".body, .title > span", o).hide();
         $(".drag_handle", o).unbind('click');
@@ -172,7 +171,7 @@ defaultPrepare =function(ticket, target) {
         data['tkt_action']=action;
     }
     var parent = ticket.parent();
-    update_cell(ticket.parent(), idx);
+    update_cell(parent, idx);
     var copy = ticket.remove().draggable(draggable_options);
     target.append(copy);
     return {'ticket': copy, 'data':data};
@@ -193,6 +192,7 @@ teamMemberPrepare=function(ticket, member) {
 defaultPostprocess = function(ticket, data){
     if (data.result=='done'){
         var mil = data.milestone;
+        var parent = ticket.parent();
         if(typeof(mil)=='undefined' || current_milestone[mil] || !ticket.hasClass('draggable')){
             for(var key in data){
                 $('[field_name="'+key+'"]', ticket).text(data[key]);
@@ -203,12 +203,12 @@ defaultPostprocess = function(ticket, data){
                 $(".parameter[status]", ticket).addClass('hidden');
                 $(".parameter[status='"+data.status+"']", ticket).removeClass('hidden');
             }
-            update_cell(ticket.parent());
             colorizeWidget(ticket);
             change_ticket_view(ticket, 'summary');
         }else{
             ticket.remove();
         }
+        update_cell(parent);
     }
 }
 save_ticket_changes = function(ticket, send_data, postprocess){

@@ -549,24 +549,31 @@ table.whiteboard_table tbody tr.odd td {
 	position: absolute;
 	padding-left: 15px;
 }
-
+.wd-panel-section{
+    vertical-align: top;
+}
 
 #wb-section-info {
+    vertical-align: top;
 	float: right;
 	padding: 0 25px 0 0;
 	margin: 0;
 }
 #wb-section-info-view{
+    vertical-align: top;
 	display: inline-block;
 	padding: 3px 10px 3px 10px;
 }
-#wb-section-info-members {
+#wb-section-info-members, #wb-section-info-levels {
+    vertical-align: top;
 	display: inline-block;
 	background: url(./../images/wb-section-info-divider.png) no-repeat left top;
 	padding: 3px 13px 3px 18px;
 }
 #wb-section-info-milestone {
+    vertical-align: top;
 	display: inline-block;
+    max-width: 255px;
 	background: url(./../images/wb-section-info-divider.png) no-repeat left top;
 	padding: 3px 0 3px 18px;
 }
@@ -607,7 +614,7 @@ table.whiteboard_table tbody tr.odd td {
 	color: #666666;
 	font-size: .8em;
 }
-#milestones-completed {
+.milestones-options{
 	padding: 10px 0 0 0;
 	margin-bottom: -3px;
 }
@@ -654,7 +661,9 @@ table.whiteboard_table tbody tr.odd td {
 	background: url(./../images/wb-list-bullet.png) no-repeat 4px 8px;
 	line-height: 100%;
 }
-
+#wb-section3 {
+    max-width: 255px;
+}
 #wb-section3 ul {
 	margin: 0;
 	padding: 0;
@@ -690,6 +699,7 @@ table.whiteboard_table tbody tr.odd td {
 }
 
 #wb-section-levels  li {
+	padding: 0 15px;
 	list-style: none;
 }
 #black_hole {

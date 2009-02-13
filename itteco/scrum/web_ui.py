@@ -46,15 +46,18 @@ class DashboardModule(Component):
     default_milestone_level = Option('itteco-whiteboard-config', 'default_milestone_level','Sprint',
         "The milestone level selected on storyboard by default.")
 
-    user_story_weight_field = Option('itteco-whiteboard-tickets-config', 'user_story_weight_field', 'business_value',
+    scope_element = ListOption('itteco-whiteboard-tickets-config', 'scope_element', ['story'],
+        doc="All tickets in a whiteboard would be grouped accorging their tracibility to this type of ticket")
+
+    scope_element_weight_field = Option('itteco-whiteboard-tickets-config', 'scope_element_weight_field', 'business_value',
         "The ticket field that would be used for user story weight calculation")
 
-    task_weight_field = Option('itteco-whiteboard-tickets-config', 'task_weight_field', 'complexity',
-        "The ticket field that would be used for ticket weight calculation")
+    excluded_element = ListOption('itteco-whiteboard-tickets-config', 'excluded_element', [],
+        doc="List of the ticket types, which should be excluded from the whiteboard.")
 
-    user_story_ticket_type = Option('itteco-whiteboard-tickets-config', 'user_story_ticket_type', 'story',
-        "All tickets in a whiteboard would be grouped accorging their tracibility to this type of ticket")
-    
+    work_element_weight_field = Option('itteco-whiteboard-tickets-config', 'work_element_weight_field', 'complexity',
+        "The ticket field that would be used for ticket weight calculation")
+        
     team = ListOption('itteco-whiteboard-config', 'team',[],
         doc="The comma separated list of the team memebers. Is used on whiteboard.")
     
@@ -185,57 +188,73 @@ class DashboardModule(Component):
         board_type = req.args.get('board_type', 'team_tasks')
         milestone_name = req.args.get('milestone', 'nearest')
         
-        milestone = self._resolve_milestone(milestone_name)
+        show_closed_milestones = req.args.get('show_closed_milestones', False)
+        include_sub_mils = req.args.get('include_sub_mils', False)
+
+        milestone = self._resolve_milestone(milestone_name, include_sub_mils)
         if milestone and not isinstance(milestone, list) and milestone != milestone_name:
             req.redirect(req.href.whiteboard(board_type, milestone))
-        
+            
         add_script(req, 'itteco/js/taskboard.js')
-        show_closed_milestones = req.args.get('show_closed_milestones', False)
-        field = self._get_ticket_fields(self.task_weight_field)
-        field = field and field[0] or self.task_weight_field
+
+        all_tkt_types = set([ticket.name for ticket in Type.select(self.env)])
+               
+        field = self._get_ticket_fields(self.work_element_weight_field)
+        field = field and field[0] or self.work_element_weight_field
         data.update({'milestones' : StructuredMilestone.select(self.env, show_closed_milestones),
             'show_closed_milestones':show_closed_milestones,
+            'include_sub_mils':include_sub_mils,
             'milestone': milestone,
             'table_title': _('User story\Ticket status'),
             'progress_field': field,
-            'types': [ticket.name for ticket in Type.select(self.env)],
+            'types': all_tkt_types,
             'row_head_renderer':'itteco_ticket_widget.html'})
             
-        max_story_weight = self._get_max_weight(self.user_story_weight_field)
-        max_task_weight = self._get_max_weight(self.task_weight_field)
+        max_scope_item_weight = self._get_max_weight(self.scope_element_weight_field)
+        max_work_item_weight = self._get_max_weight(self.work_element_weight_field)
         
-        dummy_story = dummy()
-        dummy_story.tkt = dummy_story
-        user_stories = {dummy_story.id: {'story': dummy_story}}
-        def append_ticket(ticket, tkt_group, story = dummy_story):
-            id = story['id']
-            if not user_stories.has_key(id):
-                user_stories[id] = self._get_empty_group()
-                user_stories[id]['story']=story
-                self._add_rendering_properties(story['type'], self.user_story_weight_field, max_story_weight, user_stories[id])
+        dummy_item = dummy()
+        dummy_item.tkt = dummy_item
+        wb_items = {dummy_item.id: {'scope_item': dummy_item}}
+        def append_ticket(ticket, tkt_group, scope_item = dummy_item):
+            id = scope_item['id']
+            if not wb_items.has_key(id):
+                wb_items[id] = self._get_empty_group()
+                wb_items[id]['scope_item']=scope_item
+                self._add_rendering_properties(scope_item['type'], self.scope_element_weight_field, max_scope_item_weight, wb_items[id])
             tkt_dict = {'ticket' : ticket}
-            self._add_rendering_properties(ticket['type'], self.task_weight_field, max_task_weight, tkt_dict)
-            user_stories[id].setdefault(tkt_group, []).append(tkt_dict)
+            self._add_rendering_properties(ticket['type'], self.work_element_weight_field, max_work_item_weight, tkt_dict)
+            wb_items[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        for tkt_info in self._get_ticket_info(milestone, req=req, resolve_links=True):
-            if tkt_info['type']==self.user_story_ticket_type:
+        active_tkt_types = (all_tkt_types | set([t for t in self.scope_element])) - set([t for t in self.excluded_element])
+        for tkt_info in self._get_ticket_info(milestone, active_tkt_types, req=req, resolve_links=True):
+            if tkt_info['type'] in self.scope_element:
                 sid = tkt_info['id']
-                user_stories.setdefault(sid, self._get_empty_group())['story']=tkt_info
-                self._add_rendering_properties(tkt_info['type'], self.user_story_weight_field, max_story_weight, user_stories[sid])
+                wb_items.setdefault(sid, self._get_empty_group())['scope_item']=tkt_info
+                self._add_rendering_properties(tkt_info['type'], self.scope_element_weight_field, max_scope_item_weight, wb_items[sid])
                 continue
             tkt_group = self._get_ticket_group(tkt_info)
-            story_found = False
+            scope_item_found = False
             links = tkt_info.get('links')
             if links:
                 for link_info in links:
-                    if link_info['type']==self.user_story_ticket_type:
-                        story_found = True
+                    if link_info['type'] in self.scope_element:
+                        scope_item_found = True
                         append_ticket(tkt_info, tkt_group, link_info)
                         break
-            if not story_found:
+            if not scope_item_found:
                 append_ticket(tkt_info, tkt_group)
-        data['stories'] = user_stories
-        data['row_items_iterator']= sorted([s['story'] for s in user_stories.values()], key=lambda x: x and x['id'] and int(x['id']) or sys.maxint)
+        data['wb_items'] = wb_items
+        def mkey(x):
+            f = self.scope_element_weight_field or 'id'
+            key = x and x['id']
+            try:
+                key = key and (x[f] and -int(x[f]) or 1) or sys.maxint
+            except:
+                pass
+            return key
+                
+        data['row_items_iterator']= sorted([s['scope_item'] for s in wb_items.values()], key=mkey)
 
             
     def _add_storyboard_data(self, req, data):
@@ -248,8 +267,8 @@ class DashboardModule(Component):
 
         dummy_mil = dummy()
         dummy_mil.name=dummy_mil.summary = ''
-        field = self._get_ticket_fields(self.user_story_weight_field)
-        field = field and field[0] or self.task_weight_field
+        field = self._get_ticket_fields(self.scope_element_weight_field)
+        field = field and field[0] or self.work_element_weight_field
         
         data.update({'milestones' : mils,            
             'milestone': milestone,
@@ -259,11 +278,10 @@ class DashboardModule(Component):
             'row_items_iterator': mils+[dummy_mil],
             'row_head_renderer':'itteco_milestone_widget.html'})
 
-        max_story_weight = self._get_max_weight(self.user_story_weight_field)
+        max_scope_item_weight = self._get_max_weight(self.scope_element_weight_field)
         
         milestone_sum_fields=self._get_ticket_fields(self.milestone_summary_fields)
-        user_stories = dict()
-        print mils_dict.keys()
+        wb_items = dict()
         def get_root_milestone(mil):
             m = mils_dict.get(mil)
             while m and m.level['label']!=selected_mil_level and m.parent:
@@ -271,21 +289,21 @@ class DashboardModule(Component):
             return m and m.name or ''
         def append_ticket(ticket, tkt_group, group_name):
             id = group_name or None
-            if not user_stories.has_key(id):
-                user_stories[id] = self._get_empty_group()
-                user_stories[id]['fields']=milestone_sum_fields
+            if not wb_items.has_key(id):
+                wb_items[id] = self._get_empty_group()
+                wb_items[id]['fields']=milestone_sum_fields
             tkt_dict = {'ticket' : ticket}
-            self._add_rendering_properties(ticket['type'], self.user_story_weight_field, max_story_weight, tkt_dict)
-            user_stories[id].setdefault(tkt_group, []).append(tkt_dict)
+            self._add_rendering_properties(ticket['type'], self.scope_element_weight_field, max_scope_item_weight, tkt_dict)
+            wb_items[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        for tkt_info in self._get_ticket_info(milestone, self.user_story_ticket_type, req):
+        for tkt_info in self._get_ticket_info(milestone, self.scope_element, req):
             tkt_group = self._get_ticket_group(tkt_info)
             append_ticket(tkt_info, tkt_group, get_root_milestone(tkt_info['milestone']))
             
         for mil in milestone:
-            if not user_stories.has_key(mil):
-                user_stories[mil] = {'fields':milestone_sum_fields}
-        data['stories'] = user_stories
+            if not wb_items.has_key(mil):
+                wb_items[mil] = {'fields':milestone_sum_fields}
+        data['wb_items'] = wb_items
     
     def _get_milestones_by_level(self, level_name):
         mils =[]
@@ -307,7 +325,16 @@ class DashboardModule(Component):
             
         return (mils, mils_dict)
         
-    def _resolve_milestone(self, name):
+    def _resolve_milestone(self, name, include_kids = False):
+        def _flatten_and_get_names(mil, include_kids):
+            names= []
+            if mil:
+                mil = isinstance(mil, StructuredMilestone) and [mil,] or mil
+                for m in mil:
+                    names.append(m.name)
+                    if include_kids:
+                        names.extend(_flatten_and_get_names(m.kids, include_kids))
+            return names
         if name=='nearest':
             db = self.env.get_db_cnx()
             cursor = db.cursor()
@@ -315,10 +342,11 @@ class DashboardModule(Component):
             row = cursor.fetchone()
             name=row and row[0] or 'none'
         elif name=='not_completed_milestones':
-            return [mil.name for mil in Milestone.select(self.env, False)]        
+            return _flatten_and_get_names(StructuredMilestone.select(self.env, False), include_kids)
         if name=='none':
             return ''
-        return StructuredMilestone(self.env, name).name
+        return _flatten_and_get_names(StructuredMilestone(self.env, name), include_kids)
+            
         
             
     def _perform_action(self, req):

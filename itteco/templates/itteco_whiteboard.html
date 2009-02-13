@@ -43,7 +43,7 @@
 	            <strong>Team:</strong> ${team and len(team) or 0} member(s) / Selected: <span class="active_filter">All</span>
             </span>
             <span id="wb-section-info-levels" py:if="milestone_levels">
-            	<strong>Level:</strong> $current_mil_level
+            	<strong>Level:</strong> <span class="active_filter">$current_mil_level</span>
             </span>
             <span id="wb-section-info-milestone" py:if="board_type!='stories'">
             	<strong>Milestone:</strong> <a href="#"> ${(milestone and isinstance(milestone, list) and ", ".join(milestone) or milestone) or 'Backlog (no milestone)'}</a>
@@ -77,7 +77,7 @@
             </div>
 
             <div class="wb-panel-section" id="wb-section-levels" py:if="milestone_levels">
-                <strong>Level:</strong> $current_mil_level
+                <strong>Level:</strong> <span class="active_filter">$current_mil_level</span>
                 <form id="mil_level_form">
                 <ul>
                     <li py:for="i, level in enumerate(milestone_levels)">
@@ -124,7 +124,7 @@
             </tr>
           </thead>
           <tbody>
-              <tr py:for="obj in row_items_iterator" py:with="idx= obj.name or obj.id or '';items = stories.get(idx or None)" idx="${idx}">
+              <tr py:for="obj in row_items_iterator" py:with="idx= obj.name or obj.id or '';items = wb_items.get(idx or None)" idx="${idx}">
                 <th class="group_holder" idx="${idx}" valign="top">
                     <xi:include href="${row_head_renderer}" py:with="cfg=items"/>
                 </th>

@@ -41,9 +41,15 @@
                 </li>
                 </py:for>
                 <li py:if="level==0"><a href="${href.whiteboard(board_type, 'not_completed_milestones')}">All active milestones</a></li>
-                <div id="milestones-completed" py:if="level==0">
-                    <input type="checkbox" name="completed" checked="${show_closed_milestones and 'checked' or None}" onchange="var loc = document.location.protocol+'//'+document.location.host+document.location.pathname; if(this.checked){loc=loc+'?' +(document.location.search ? (document.location.search +'${'&amp;'}') : '')+'show_closed_milestones=true'}; document.location=loc;"/><label>Show already completed milestones</label>
+                <form id="mils_options"  py:if="level==0">
+                <div class="milestones-options">
+                    <input id="sub_mils_switch" type="checkbox" name="include_sub_mils" checked="${include_sub_mils and 'checked' or None}" onchange="$('#mils_options').submit();"/><label for="sub_mils_switch">Include tickets from sub-milestones</label>
                 </div>
+                <div class="milestones-options">
+                    <input id="complete_mils_switch" type="checkbox" name="show_closed_milestones" checked="${show_closed_milestones and 'checked' or None}" onchange="$('#mils_options').submit();"/><label for="complete_mils_switch">Show already completed milestones</label>
+                </div>
+                </form>
+
             </ul>
         </py:if>
     </div>
