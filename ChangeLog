@@ -1,6 +1,7 @@
 # Itteco Trac Plugin Changelog #
 IttecoTracPlugin 0.1.7 (February 26, 2009)
 * fixes trac 0.11.3 compatibility provided by Shane Caraveo
+* UserManagerPlugin integration
 
 IttecoTracPlugin 0.1.6 (February 13, 2009)
 * rebuild team tasks (ticket:29, ticket:41, ticket:44)

@@ -4,7 +4,7 @@ from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
 from trac.core import Component, implements, TracError
-from trac.config import Option, ListOption
+from trac.config import Option, ListOption, ExtensionOption
 from trac.ticket.roadmap import apply_ticket_permissions
 from trac.ticket.api import TicketSystem
 from trac.ticket.model import Ticket, Resolution, Type, Milestone
@@ -20,6 +20,7 @@ from trac.web.api import IRequestHandler, ITemplateStreamFilter
 from trac.web.chrome import INavigationContributor, add_script, add_stylesheet
 
 from itteco.init import IttecoEvnSetup
+from itteco.scrum.api import ITeamMembersProvider
 from itteco.ticket.model import StructuredMilestone, TicketLinks
 from itteco.ticket.utils import get_tickets_for_milestones, get_tickets_by_ids
 from itteco.utils import json
@@ -58,8 +59,9 @@ class DashboardModule(Component):
     work_element_weight_field = Option('itteco-whiteboard-tickets-config', 'work_element_weight_field', 'complexity',
         "The ticket field that would be used for ticket weight calculation")
         
-    team = ListOption('itteco-whiteboard-config', 'team',[],
-        doc="The comma separated list of the team memebers. Is used on whiteboard.")
+    team_members_provider = ExtensionOption('itteco-whiteboard-config', 'team_members_provider',ITeamMembersProvider,
+        'ConfigBasedTeamMembersProvider',
+        doc="The component implementing a team member provider interface.")
     
     milestone_summary_fields = ListOption('itteco-whiteboard-config', 'milestone_summary_fields', ['business_value', 'complexity'],
         doc="The comma separated list of the ticket fields for which totals would be calculated within milestone widget on whiteboard.")    
@@ -180,7 +182,7 @@ class DashboardModule(Component):
                 'stats_config': self._get_stats_config(),
                 'groups': self.ticket_groups,
                 'resolutions':[val.name for val in Resolution.select(self.env)],
-                'team' : self.team}
+                'team' : self.team_members_provider and self.team_members_provider.get_team_members() or []}
                 
             for target, title in [('team_tasks', _('Team Tasks')), ('stories', _('Stories'))]:
                 add_whiteboard_ctxtnav(data, title, req.href.whiteboard(target), class_= board_type==target and "active" or '')
