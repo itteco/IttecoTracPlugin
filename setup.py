@@ -18,6 +18,7 @@ setup(
     package_data={'itteco': ['templates/*', 'htdocs/images/*', 'htdocs/css/*', 'htdocs/js/jquery.ui/*','htdocs/js/*.js'],
                   'itteco.config': ["*.ini"]},
     entry_points = {'trac.plugins': ['itteco.init = itteco.init',
+                                     'itteco.scrum.api = itteco.scrum.api',
                                      'itteco.scrum.web_ui = itteco.scrum.web_ui',
                                      'itteco.ticket.admin = itteco.ticket.admin',
                                      'itteco.ticket.roadmap = itteco.ticket.roadmap',
