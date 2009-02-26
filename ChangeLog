@@ -1,8 +1,10 @@
 # Itteco Trac Plugin Changelog #
+IttecoTracPlugin 0.1.7 (February 26, 2009)
+* fixes trac 0.11.3 compatibility provided by Shane Caraveo
+
 IttecoTracPlugin 0.1.6 (February 13, 2009)
 * rebuild team tasks (ticket:29, ticket:41, ticket:44)
 
-# Itteco Trac Plugin Changelog #
 IttecoTracPlugin 0.1.5 (February 11, 2009)
 * rows on whiteboard are collapsable
 * bug fixing
@@ -12,12 +14,10 @@ IttecoTracPlugin 0.1.4 (February 08, 2009)
 * move my tasks functionality ot team tasks panel
 * bug fixing
 
-# Itteco Trac Plugin Changelog #
 IttecoTracPlugin 0.1.3 (February 06, 2009)
 * set reference to genshi 0.5.1 and newer to fic roadmap templates
 * bug fixes
 
-# Itteco Trac Plugin Changelog #
 IttecoTracPlugin 0.1.2 (February 02, 2009)
 * move colorization to server side
 

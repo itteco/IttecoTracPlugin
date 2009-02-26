@@ -17,7 +17,7 @@ from trac.util.translation import _
 from trac.util.datefmt import utc, to_timestamp
 
 from trac.web.api import IRequestHandler, ITemplateStreamFilter
-from trac.web.chrome import INavigationContributor, add_script
+from trac.web.chrome import INavigationContributor, add_script, add_stylesheet
 
 from itteco.init import IttecoEvnSetup
 from itteco.ticket.model import StructuredMilestone, TicketLinks
@@ -163,6 +163,15 @@ class DashboardModule(Component):
     def process_request(self, req):
         req.perm('ticket').require('TICKET_VIEW')
 
+        add_stylesheet(req, 'css/roadmap.css')
+        add_stylesheet(req, 'itteco/css/common.css')
+
+        add_script(req, 'itteco/js/jquery.ui/ui.core.js')
+        add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
+        add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
+        add_script(req, 'itteco/js/custom_select.js')
+        add_script(req, 'itteco/js/whiteboard.js')
+        
         board_type = req.args.get('board_type', 'team_tasks')
         if board_type=='modify':
             self._perform_action(req)

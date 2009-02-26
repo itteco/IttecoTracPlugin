@@ -99,11 +99,34 @@ class IttecoMilestoneAdminPanel(MilestoneAdminPanel):
                 'view': 'list',
                 'default': self.config.get('ticket', 'default_milestone'),
             }
+            
+        # Get ticket count
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        milestones = []
+        structured_milestones = StructuredMilestone.select(self.env)
+        mil_names = self._get_mil_names(structured_milestones)
+        
+        cursor.execute("SELECT milestone, COUNT(*) FROM ticket "
+                   "WHERE milestone IN (%s) GROUP BY milestone" % ("%s,"*len(mil_names))[:-1], mil_names)
+        mil_tkt_quantity = {}
+        for mil, cnt in cursor:
+            mil_tkt_quantity[mil]=cnt
 
         data.update({
             'date_hint': get_date_format_hint(),
-            'milestones': StructuredMilestone.select(self.env),
+            'milestones': [(mil, 0) for mil in structured_milestones],# we recover this anyway
+            'structured_milestones': structured_milestones,
+            'milestone_tickets_quantity': mil_tkt_quantity,
             'max_milestone_level': self.milestone_levels and len(self.milestone_levels)-1 or 0,
             'datetime_hint': get_datetime_format_hint()
         })
         return 'itteco_admin_milestones.html', data
+        
+    def _get_mil_names(self, mils):
+        res = []
+        if mils:
+            for mil in mils:
+                res.append(mil.name)
+                res.extend(self._get_mil_names(mil.kids))
+        return res

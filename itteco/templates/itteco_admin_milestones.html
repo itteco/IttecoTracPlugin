@@ -26,6 +26,7 @@
                   <input type="radio" name="default" value="$milestone.name"
                          checked="${milestone.name==default or None}" />
                 </td>
+                <td>${milestone_tickets_quantity.get(milestone.name)}</td>
               </tr>
                 ${render_milestones_table(milestone.kids, level +1)}
             </py:for>
@@ -53,10 +54,10 @@
         <table py:attrs="select('@*')">
               <thead>
                 <tr><th class="sel">&nbsp;</th>
-                  <th>Name</th><th>Due</th><th>Completed</th><th>Default</th>
+                    <th>Name</th><th>Due</th><th>Completed</th><th>Default</th><th>Tickets</th>
                 </tr>
               </thead>
-              <tbody>${render_milestones_table(milestones,0)}</tbody>
+              <tbody>${render_milestones_table(structured_milestones,0)}</tbody>
         </table>
     </py:match>
     

@@ -22,5 +22,5 @@ setup(
                                      'itteco.ticket.admin = itteco.ticket.admin',
                                      'itteco.ticket.roadmap = itteco.ticket.roadmap',
                                      'itteco.ticket.web_ui = itteco.ticket.web_ui']},
-    install_requires=['trac >= 0.11','genshi >= 0.5.1'], 
+    install_requires=['trac >= 0.11.3','genshi >= 0.5.1'], 
 )

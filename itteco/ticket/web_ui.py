@@ -65,7 +65,7 @@ class IttecoTicketModule(Component):
             and 'max_level' not in data:
             milestone = data.get('milestone')
             levels = IttecoMilestoneAdminPanel(self.env).milestone_levels
-            mydata ={'milestones':StructuredMilestone.select(self.env),
+            mydata ={'structured_milestones':StructuredMilestone.select(self.env),
                   'max_level':  levels and len(levels)-1 or 0,
                   'milestone_name' : milestone and milestone.parent or None,
                   'field_name' : 'parent'}
@@ -73,7 +73,7 @@ class IttecoTicketModule(Component):
             
         if 'ticket' in data:
             tkt = data['ticket']
-            mydata ={'milestones':StructuredMilestone.select(self.env),
+            mydata ={'structured_milestones':StructuredMilestone.select(self.env),
                  'milestone_name': data['ticket']['milestone'],
                  'field_name' : 'field_milestone',
                  'hide_completed' : not ( tkt.exists and 'TICKET_ADMIN' in req.perm(tkt.resource))
