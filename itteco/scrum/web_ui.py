@@ -165,7 +165,7 @@ class DashboardModule(Component):
     def process_request(self, req):
         req.perm('ticket').require('TICKET_VIEW')
 
-        add_stylesheet(req, 'css/roadmap.css')
+        add_stylesheet(req, 'common/css/roadmap.css')
         add_stylesheet(req, 'itteco/css/common.css')
 
         add_script(req, 'itteco/js/jquery.ui/ui.core.js')
