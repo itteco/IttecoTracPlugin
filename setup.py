@@ -13,7 +13,7 @@ setup(
     author='Itteco.com',
     url='http://www.itteco.com/',
     description='Itteco Trac Plugin.',
-    license='Apache License 2.0',
+    license='MIT',
     packages=find_packages(),
     package_data={'itteco': ['templates/*', 'htdocs/images/*', 'htdocs/css/*', 'htdocs/js/jquery.ui/*','htdocs/js/*.js'],
                   'itteco.config': ["*.ini"]},

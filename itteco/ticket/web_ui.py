@@ -8,6 +8,7 @@ from trac.search.web_ui import SearchModule
 from trac.ticket import Ticket, Type
 from trac.ticket.web_ui import TicketModule
 from trac.util.translation import _
+from trac.util.text import to_unicode
 from trac.web.api import IRequestHandler, IRequestFilter, ITemplateStreamFilter
 from trac.web.chrome import Chrome, add_stylesheet, add_script, add_ctxtnav
 from trac.wiki.web_ui import WikiModule
@@ -45,9 +46,10 @@ class IttecoTicketModule(Component):
     def post_process_request(self, req, template, data, content_type):
         if req.path_info.startswith('/ticket/') or req.path_info.startswith('/newticket') or req.path_info.startswith('/milestone'):
             add_stylesheet(req, 'itteco/css/common.css')
+            add_script(req, 'itteco/js/jquery.ui/ui.core.js')
+            add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
             add_script(req, 'itteco/js/custom_select.js')
         if req.path_info.startswith('/ticket/'):
-            add_script(req, 'itteco/js/jquery.ui/ui.core.js')
             add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
             add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
             add_script(req, 'itteco/js/dndsupport.js')
@@ -142,10 +144,10 @@ class JSonSearchtModule(Component):
                     ticket_type = match.group(2).strip()
                     if not req.args.has_key(ticket_type):
                         continue
-                    res['title']='%s %s:%s' % (ticket_type, match.group(1), match.group(3))
+                    res['title']=to_unicode('%s %s:%s' % (ticket_type, match.group(1), match.group(3)))
                     res['idx'] = '%02d' % all_types.index(ticket_type)
             else:
-                res['title'] = 'wiki: %s' % res['title'].split(':',2)[0]
+                res['title'] = to_unicode('wiki: %s' % res['title'].split(':',2)[0])
                 res['idx']=99
             filtered_res.append(res)
         

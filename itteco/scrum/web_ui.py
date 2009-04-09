@@ -171,6 +171,7 @@ class DashboardModule(Component):
         add_script(req, 'itteco/js/jquery.ui/ui.core.js')
         add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
         add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
+        add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
         add_script(req, 'itteco/js/custom_select.js')
         add_script(req, 'itteco/js/whiteboard.js')
         
@@ -212,7 +213,7 @@ class DashboardModule(Component):
                
         field = self._get_ticket_fields(self.work_element_weight_field)
         field = field and field[0] or self.work_element_weight_field
-        data.update({'milestones' : StructuredMilestone.select(self.env, show_closed_milestones),
+        data.update({'structured_milestones' : StructuredMilestone.select(self.env, show_closed_milestones),
             'show_closed_milestones':show_closed_milestones,
             'include_sub_mils':include_sub_mils,
             'milestone': milestone,
@@ -270,18 +271,19 @@ class DashboardModule(Component):
             
     def _add_storyboard_data(self, req, data):
         add_script(req, 'itteco/js/storyboard.js')
-        
         selected_mil_level = req.args.get('mil_level',self.default_milestone_level)
-        mils, mils_dict = self._get_milestones_by_level(selected_mil_level)
-        milestone = mils_dict.keys()
-        milestone.insert(0,'')
+        
+        mils_tree = StructuredMilestone.select(self.env, True)
+        mils, mils_dict = self._get_milestones_by_level(mils_tree, selected_mil_level)
+        milestone = [mil.name for mil in mils] +['']
 
         dummy_mil = dummy()
         dummy_mil.name=dummy_mil.summary = ''
         field = self._get_ticket_fields(self.scope_element_weight_field)
         field = field and field[0] or self.work_element_weight_field
         
-        data.update({'milestones' : mils,            
+        data.update({'milestones' : mils,
+            'structured_milestones' : mils_tree,
             'milestone': milestone,
             'milestone_levels': [{'name': name, 'selected': name==selected_mil_level} for name in IttecoEvnSetup(self.env).milestone_levels],
             'table_title': _('Milestone\User story status'),
@@ -316,7 +318,7 @@ class DashboardModule(Component):
                 wb_items[mil] = {'fields':milestone_sum_fields}
         data['wb_items'] = wb_items
     
-    def _get_milestones_by_level(self, level_name):
+    def _get_milestones_by_level(self, mils_tree, level_name):
         mils =[]
         mils_dict={}
         def filter_mils(mil, force_add=False):
@@ -329,8 +331,7 @@ class DashboardModule(Component):
             else:
                 for kid in mil.kids:
                     filter_mils(kid, force_add)
-                
-        mils_tree = StructuredMilestone.select(self.env, True)
+        
         for mil in mils_tree:
             filter_mils(mil)
             
