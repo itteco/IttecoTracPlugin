@@ -3,7 +3,7 @@ prepareData = function(ticket, target){
     var new_mil = target.siblings('th').attr('idx');
     var x = defaultPrepare(ticket, target);
     if(old_mil!=new_mil){
-        x.data.field_milestone = field_milestone;
+        x.data.field_milestone = new_mil;
     }
     return x;
 }

@@ -12,12 +12,21 @@
 
 .custom_drop_down_box {
 	border: 1px solid rgb(102, 102, 102);
-	background: rgb(255, 255, 255) none repeat scroll 0% 0%;
-	overflow: auto;
+	background: #FFF none repeat scroll 0% 0%;
+    padding-bottom: 9px;
+    padding-right: 9px;
 	position: absolute;
 	height: 100px;
-	cursor: pointer;
-	display: none;
+	display: none;    
+}
+.custom_drop_down_box  ul{margin-left: 10px; padding: 0; }
+	
+.custom_drop_down_box .milestone{cursor: pointer;}
+
+.custom_drop_down_box .resizer{
+    height:100%;
+	overflow: auto;
+    width:100%;
 }
 
 .focused_drop_down_item {
@@ -295,7 +304,7 @@ table.whiteboard_table tbody tr.odd td {
 }
 
 
-.widget .parameter_value #milestones_tree {
+.widget .parameter_value .milestones_tree {
 	padding-bottom: 3px;
 	width: 95%;
 }
