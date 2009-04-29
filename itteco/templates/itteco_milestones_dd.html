@@ -1,27 +1,22 @@
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:xi="http://www.w3.org/2001/XInclude"
       xmlns:py="http://genshi.edgewall.org/" py:strip="">
-
     <div py:def="render_milestones(items, level, maxlevel, hide_completed)" py:strip="">
-        <py:if test="items and (maxlevel==-1 or (maxlevel-level)!=0)">
-            <py:for each="item in items" py:if="not (item.completed and hide_completed)">
-                <div style="padding-left:${(level+1)*10}px" class="${item.completed and 'completed_milestone' or ''}"><em>${item.name}</em>(${item.level['label']})</div>
-                ${render_milestones(item.kids, level +1, maxlevel, hide_completed)}
-            </py:for>
-        </py:if>
+        <ul py:if="items and (maxlevel==-1 or (maxlevel-level)!=0)">
+            <li py:if="level==0"><div class="item-droppable milestone">Backlog (no milestone)</div></li>
+            <li py:for="item in items"><div href="#" class="item-droppable milestone ${item.completed and 'completed_milestone' or ''}"><span>${item.name}</span><span class="milestone-type">[${item.level['label']}]</span></div>
+            ${render_milestones(item.kids, level +1, maxlevel, hide_completed)}
+            </li>
+        </ul>
     </div>
 
-    <div py:def="render_milestone_selection(parent, field_name, maxlevel, hide_completed)" py:strip="">
-        <div id="milestones_tree">
-            <div class="custom_drop_down" onclick="toggleDD(this);">
-                ${parent or ''}
-            </div>
-            <div class="custom_drop_down_box">
-                <div empty="1" style="min-height:1.3em;"><em></em></div>
+    <div py:def="render_milestone_selection(value, field_name, maxlevel, hide_completed)" py:strip="">
+        <div class="milestones_tree">
+            <input type="hidden" name="old_${field_name}" value="${value}"/>
+            <input name="${field_name}" value="${value}" class="custom_drop_down" onclick="toggleDD(this);"/>
+            <div class="custom_drop_down_box"><div class="resizer">
                 ${render_milestones(structured_milestones,0, maxlevel, hide_completed)}
-            </div>
-            <input type="hidden" name="${field_name}" value="${parent}"/>
-            <input type="hidden" name="old_${field_name}" value="${parent}"/>
+            </div></div>
         </div>
     </div>
     ${render_milestone_selection(milestone_name,field_name, max_level or -1, hide_completed)}

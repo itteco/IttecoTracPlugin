@@ -30,19 +30,19 @@
         window.stats_status_to_group = {${','.join(["'%s':'%s'" % (s, cfg['name']) for cfg in stats_config for s in cfg['statuses']])}};
         window.actionUrl = "${href.whiteboard('modify')+'?action=change_task'}";        
      </div>
-     <div py:def="render_milestones(items, level, maxlevel=-1)" py:strip="">
+     <div py:def="render_milestones(items, level, maxlevel=-1, show_extras=True)" py:strip="">
         <py:if test="items and (maxlevel==-1 or (maxlevel-level)!=0)">
             <br/>
             <ul>
-                <li py:if="level==0"><a href="${href.whiteboard(board_type, 'none')}" class="item-droppable milestone">Backlog (no milestone)</a></li>
+                <li py:if="level==0 and show_extras"><a href="${href.whiteboard(board_type, 'none')}" class="item-droppable milestone">Backlog (no milestone)</a></li>
                 <py:for each="item in items">
                 <li><a href="${href.whiteboard(board_type, item.name)}" class="item-droppable milestone"><span>${item.name}</span><span class="milestone-type">[${item.level['label']}]</span></a>
-                ${render_milestones(item.kids, level +1, maxlevel)}
+                ${render_milestones(item.kids, level +1, maxlevel, show_extras)}
                 </li>
                 </py:for>
-                <li py:if="level==0"><a href="${href.whiteboard(board_type, 'not_completed_milestones')}">All active milestones</a></li>
+                <li py:if="level==0 and show_extras"><a href="${href.whiteboard(board_type, 'not_completed_milestones')}">All active milestones</a></li>
                 <form id="mils_options"  py:if="level==0">
-                <div class="milestones-options">
+                <div class="milestones-options" py:if="show_extras">
                     <input id="sub_mils_switch" type="checkbox" name="include_sub_mils" checked="${include_sub_mils and 'checked' or None}" onchange="$('#mils_options').submit();"/><label for="sub_mils_switch">Include tickets from sub-milestones</label>
                 </div>
                 <div class="milestones-options">

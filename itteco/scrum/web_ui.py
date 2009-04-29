@@ -1,5 +1,7 @@
-from datetime import datetime
+from copy import deepcopy
+from datetime import date, datetime
 import sys
+
 from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
@@ -13,14 +15,15 @@ from trac.ticket.roadmap import DefaultTicketGroupStatsProvider
 
 from trac.util import get_reporter_id
 from trac.util.compat import set
+from trac.util.datefmt import utc, to_timestamp, format_datetime
 from trac.util.translation import _
-from trac.util.datefmt import utc, to_timestamp
 
 from trac.web.api import IRequestHandler, ITemplateStreamFilter
 from trac.web.chrome import INavigationContributor, add_script, add_stylesheet
 
 from itteco.init import IttecoEvnSetup
 from itteco.scrum.api import ITeamMembersProvider
+from itteco.scrum.burndown import IBurndownInfoProvider
 from itteco.ticket.model import StructuredMilestone, TicketLinks
 from itteco.ticket.utils import get_tickets_for_milestones, get_tickets_by_ids
 from itteco.utils import json
@@ -47,14 +50,8 @@ class DashboardModule(Component):
     default_milestone_level = Option('itteco-whiteboard-config', 'default_milestone_level','Sprint',
         "The milestone level selected on storyboard by default.")
 
-    scope_element = ListOption('itteco-whiteboard-tickets-config', 'scope_element', ['story'],
-        doc="All tickets in a whiteboard would be grouped accorging their tracibility to this type of ticket")
-
     scope_element_weight_field = Option('itteco-whiteboard-tickets-config', 'scope_element_weight_field', 'business_value',
         "The ticket field that would be used for user story weight calculation")
-
-    excluded_element = ListOption('itteco-whiteboard-tickets-config', 'excluded_element', [],
-        doc="List of the ticket types, which should be excluded from the whiteboard.")
 
     work_element_weight_field = Option('itteco-whiteboard-tickets-config', 'work_element_weight_field', 'complexity',
         "The ticket field that would be used for ticket weight calculation")
@@ -66,6 +63,10 @@ class DashboardModule(Component):
     milestone_summary_fields = ListOption('itteco-whiteboard-config', 'milestone_summary_fields', ['business_value', 'complexity'],
         doc="The comma separated list of the ticket fields for which totals would be calculated within milestone widget on whiteboard.")    
     
+    burndown_info_provider = ExtensionOption('itteco-whiteboard-config', 'burndown_info_povider',IBurndownInfoProvider,
+        'BuildBurndownInfoProvider',
+        doc="The component implementing a burndown info provider interface.")
+
     _ticket_type_config = _old_ticket_config = _old_groups = _ticket_groups= None
     
     ticket_groups = property(lambda self: self._get_ticket_groups())
@@ -164,33 +165,39 @@ class DashboardModule(Component):
 
     def process_request(self, req):
         req.perm('ticket').require('TICKET_VIEW')
-
-        add_stylesheet(req, 'common/css/roadmap.css')
-        add_stylesheet(req, 'itteco/css/common.css')
-
-        add_script(req, 'itteco/js/jquery.ui/ui.core.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
-        add_script(req, 'itteco/js/custom_select.js')
-        add_script(req, 'itteco/js/whiteboard.js')
         
         board_type = req.args.get('board_type', 'team_tasks')
         if board_type=='modify':
             self._perform_action(req)
-        else:    
+        elif board_type == 'chart_settings':
+            return self._chart_settings(req.args['milestone'])
+        else:
+            add_stylesheet(req, 'common/css/roadmap.css')
+            add_stylesheet(req, 'itteco/css/common.css')
+
+            add_script(req, 'itteco/js/jquery.ui/ui.core.js')
+            add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
+            add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
+            add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
+            add_script(req, 'itteco/js/custom_select.js')
+            add_script(req, 'itteco/js/whiteboard.js')
+
             data ={'board_type' : board_type,
                 'stats_config': self._get_stats_config(),
                 'groups': self.ticket_groups,
+                'show_closed_milestones':req.args.get('show_closed_milestones', False),
                 'resolutions':[val.name for val in Resolution.select(self.env)],
                 'team' : self.team_members_provider and self.team_members_provider.get_team_members() or []}
                 
-            for target, title in [('team_tasks', _('Team Tasks')), ('stories', _('Stories'))]:
+            for target, title in [('team_tasks', _('Team Tasks')), ('stories', _('Stories')), ('burndown', _('Burndown'))]:
                 add_whiteboard_ctxtnav(data, title, req.href.whiteboard(target), class_= board_type==target and "active" or '')
                 if board_type==target:
                     data['board_type_title'] = title
 
             if board_type=='stories':
                 self._add_storyboard_data(req, data)
+            elif board_type=='burndown':
+                self._add_burndown_data(req, data)
             else:
                 self._add_taskboard_data(req, data)
             return 'itteco_whiteboard.html', data, 'text/html'
@@ -212,8 +219,7 @@ class DashboardModule(Component):
                
         field = self._get_ticket_fields(self.work_element_weight_field)
         field = field and field[0] or self.work_element_weight_field
-        data.update({'milestones' : StructuredMilestone.select(self.env, show_closed_milestones),
-            'show_closed_milestones':show_closed_milestones,
+        data.update({'structured_milestones' : StructuredMilestone.select(self.env, show_closed_milestones),            
             'include_sub_mils':include_sub_mils,
             'milestone': milestone,
             'table_title': _('User story\Ticket status'),
@@ -237,9 +243,9 @@ class DashboardModule(Component):
             self._add_rendering_properties(ticket['type'], self.work_element_weight_field, max_work_item_weight, tkt_dict)
             wb_items[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        active_tkt_types = (all_tkt_types | set([t for t in self.scope_element])) - set([t for t in self.excluded_element])
+        active_tkt_types = (all_tkt_types | set([t for t in IttecoEvnSetup(self.env).scope_element])) - set([t for t in IttecoEvnSetup(self.env).excluded_element])
         for tkt_info in self._get_ticket_info(milestone, active_tkt_types, req=req, resolve_links=True):
-            if tkt_info['type'] in self.scope_element:
+            if tkt_info['type'] in IttecoEvnSetup(self.env).scope_element:
                 sid = tkt_info['id']
                 wb_items.setdefault(sid, self._get_empty_group())['scope_item']=tkt_info
                 self._add_rendering_properties(tkt_info['type'], self.scope_element_weight_field, max_scope_item_weight, wb_items[sid])
@@ -249,7 +255,7 @@ class DashboardModule(Component):
             links = tkt_info.get('links')
             if links:
                 for link_info in links:
-                    if link_info['type'] in self.scope_element:
+                    if link_info['type'] in IttecoEvnSetup(self.env).scope_element:
                         scope_item_found = True
                         append_ticket(tkt_info, tkt_group, link_info)
                         break
@@ -270,18 +276,19 @@ class DashboardModule(Component):
             
     def _add_storyboard_data(self, req, data):
         add_script(req, 'itteco/js/storyboard.js')
-        
         selected_mil_level = req.args.get('mil_level',self.default_milestone_level)
-        mils, mils_dict = self._get_milestones_by_level(selected_mil_level)
-        milestone = mils_dict.keys()
-        milestone.insert(0,'')
+        
+        mils_tree = StructuredMilestone.select(self.env, True)
+        mils, mils_dict = self._get_milestones_by_level(mils_tree, selected_mil_level)
+        milestone = [mil.name for mil in mils] +['']
 
         dummy_mil = dummy()
         dummy_mil.name=dummy_mil.summary = ''
         field = self._get_ticket_fields(self.scope_element_weight_field)
         field = field and field[0] or self.work_element_weight_field
         
-        data.update({'milestones' : mils,            
+        data.update({'milestones' : mils,
+            'structured_milestones' : mils_tree,
             'milestone': milestone,
             'milestone_levels': [{'name': name, 'selected': name==selected_mil_level} for name in IttecoEvnSetup(self.env).milestone_levels],
             'table_title': _('Milestone\User story status'),
@@ -307,7 +314,7 @@ class DashboardModule(Component):
             self._add_rendering_properties(ticket['type'], self.scope_element_weight_field, max_scope_item_weight, tkt_dict)
             wb_items[id].setdefault(tkt_group, []).append(tkt_dict)
             
-        for tkt_info in self._get_ticket_info(milestone, self.scope_element, req):
+        for tkt_info in self._get_ticket_info(milestone, IttecoEvnSetup(self.env).scope_element, req):
             tkt_group = self._get_ticket_group(tkt_info)
             append_ticket(tkt_info, tkt_group, get_root_milestone(tkt_info['milestone']))
             
@@ -316,21 +323,20 @@ class DashboardModule(Component):
                 wb_items[mil] = {'fields':milestone_sum_fields}
         data['wb_items'] = wb_items
     
-    def _get_milestones_by_level(self, level_name):
+    def _get_milestones_by_level(self, mils_tree, level_name, include_completed = False):
         mils =[]
         mils_dict={}
         def filter_mils(mil, force_add=False):
             mils_dict[mil.name] = mil
             if mil.level['label']==level_name:
-                if not mil.is_completed:
+                if not mil.is_completed or include_completed:
                     mils.append(mil)
                     for kid in mil.kids:
                         filter_mils(kid, True)
             else:
                 for kid in mil.kids:
                     filter_mils(kid, force_add)
-                
-        mils_tree = StructuredMilestone.select(self.env, True)
+        
         for mil in mils_tree:
             filter_mils(mil)
             
@@ -483,7 +489,82 @@ class DashboardModule(Component):
             catch_all_group['statuses'] = remaining_statuses
         
         return groups
+    
+    # Burndown related methods
+    def _add_burndown_data(self, req, data):
+        add_script(req, 'itteco/js/swfobject.js')
+        mils_tree = StructuredMilestone.select(self.env, True)
+        mils, mils_dict = self._get_milestones_by_level(mils_tree, 'Sprint', req.args.get('show_closed_milestones', False))
+        for mil in mils:
+            mil.kids = []
+        current_milestone = req.args.get('milestone')
+        del data['team']
+        data['milestone'] = current_milestone
+        data['milestones'] = mils
+        data['structured_milestones'] = mils
+        data['burndown'] = 1
         
+    def _chart_settings(self, milestone):
+        burndown_info = self.burndown_info_provider.metrics(milestone)
+        mils =[]
+        def flatten(mil):
+            mils.append(mil)
+            for kid in mil.kids:
+                flatten(kid)
+        flatten(StructuredMilestone(self.env, milestone))
+        fmt_date = lambda x: format_datetime(x, '%Y-%m-%dT%H:%M:%S')
+        cvs_data = graphs = events = None
+        if burndown_info:
+            metrics, graphs = burndown_info
+            def get_color(tkt_type):
+                tkt_cfg = self.ticket_type_config
+                if tkt_cfg:
+                    cfg = tkt_cfg.get(tkt_type)
+                    if cfg:
+                        return cfg.get('max_color')
+
+            graphs = [{'name': graph, 'color': get_color(graph)} for graph in graphs]
+
+            burndown_cvs_data = burnup_cvs_data = []
+            keys = ['burndown', 'approximation', 'ideal']
+            milestone_dates= dict([(mil.completed or mil.due, mil) for mil in mils ])
+            events =[]
+            prev_burndown = metrics[0]['burndown']
+            prev_burnup = 0
+            for metric in metrics:
+                ts = metric['datetime']
+                line = ",".join([fmt_date(ts)]+[str(metric.get(key,'')) for key in keys])
+                burnup_sum = 0
+                burnup = metric.get('burnup',[])
+                for item in burnup:
+                    burnup_sum -= item
+                    line +=','+str(-1*item)
+                if burnup:
+                    line +=','+str(burnup_sum)
+                burndown_cvs_data.append(line)
+
+                if ts in milestone_dates:
+                    mil = milestone_dates[ts]
+                    if mil.is_completed:
+                        del milestone_dates[ts]
+                        burndown = metric['burndown']
+                        events.append({'datetime': fmt_date(mil.completed),
+                            'extended': True, 
+                            'text': '"%s" completed\nBurndown delta %d\nBurnup delta %d.' \
+                                % (mil.name, prev_burndown-burndown, prev_burnup-burnup_sum) ,
+                            'url': self.env.abs_href('milestone',mil.name)})
+                        burndown_delta =0
+                        prev_burnup = burnup_sum
+                        prev_burndown = burndown
+            events.extend([{'datetime': fmt_date(mil.due),
+                            'text': '"%s" is planned to be completed.' % mil.name ,
+                            'url': self.env.abs_href('milestone',mil.name)} for mil in milestone_dates.itervalues()])
+            cvs_data = "<![CDATA["+"\n".join(burndown_cvs_data)+"]]>"
+
+        data = {'data': cvs_data, 'graphs': graphs, 'events': events}
+        return 'iiteco_chart_settings.xml', data, 'text/xml'
+
+    #ITemplateStreamFilter methods, just add signature to the footer
     def filter_stream(self, req, method, filename, stream, data):
         if req.path_info.startswith('/whiteboard'):
             data['transformed']=1

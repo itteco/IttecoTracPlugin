@@ -2,10 +2,35 @@ from pkg_resources import resource_filename
 import os
 from trac.config import Configuration
 from trac.db import Table, Column, Index, DatabaseManager
+from trac.db_default import schema
+
 from itteco import __package__, __version__
 
-def do_upgrade(env, db, version):
-    if version>=[0,1,2]:
+def do_upgrade(env, db, installed_version):
+    if installed_version>=[0,1,9]:
+        return True
+        
+    cursor = db.cursor()
+    mil_table = None
+    for table in schema:
+        if table.name =='milestone':
+            mil_table = table
+            break
+    
+    if mil_table:
+        cols ="," .join([c.name for c in mil_table.columns])
+        cursor.execute("CREATE TEMPORARY TABLE milestone_old as SELECT %s FROM milestone;" % cols)
+        cursor.execute("DROP TABLE milestone;")
+
+        new_mil_table = Table('milestone', key='id')[
+            mil_table.columns+mil_table.indices+[Column('started', type='int')]]
+
+        db_backend, _ = DatabaseManager(env)._get_connector()
+        for stmt in db_backend.to_sql(new_mil_table):
+            cursor.execute(stmt)
+        cursor.execute("INSERT INTO milestone (%s) SELECT %s FROM milestone_old;" % (cols, cols))
+
+    if installed_version>=[0,1,2]:
         return True
     trac_cfg = env.config['trac']
     mainnav = trac_cfg.getlist('mainnav',[])
@@ -36,7 +61,7 @@ def do_upgrade(env, db, version):
         custom.set('complexity.label', 'Complexity')
         custom.set('complexity.options', '|0|1|2|3|5|8|13|21|34|55|89|134')
     env.config.save()
-    if version>=[0,1]:
+    if installed_version>=[0,1]:
         return True
 
     tables = [

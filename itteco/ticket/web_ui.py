@@ -8,6 +8,7 @@ from trac.search.web_ui import SearchModule
 from trac.ticket import Ticket, Type
 from trac.ticket.web_ui import TicketModule
 from trac.util.translation import _
+from trac.util.text import to_unicode
 from trac.web.api import IRequestHandler, IRequestFilter, ITemplateStreamFilter
 from trac.web.chrome import Chrome, add_stylesheet, add_script, add_ctxtnav
 from trac.wiki.web_ui import WikiModule
@@ -43,11 +44,15 @@ class IttecoTicketModule(Component):
         return req.args['original_handler'].process_request(req)
                     
     def post_process_request(self, req, template, data, content_type):
-        if req.path_info.startswith('/ticket/') or req.path_info.startswith('/newticket') or req.path_info.startswith('/milestone'):
+        if req.path_info.startswith('/ticket/') \
+            or req.path_info.startswith('/newticket') \
+            or req.path_info.startswith('/milestone'):
+            
             add_stylesheet(req, 'itteco/css/common.css')
+            add_script(req, 'itteco/js/jquery.ui/ui.core.js')
+            add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
             add_script(req, 'itteco/js/custom_select.js')
         if req.path_info.startswith('/ticket/'):
-            add_script(req, 'itteco/js/jquery.ui/ui.core.js')
             add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
             add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
             add_script(req, 'itteco/js/dndsupport.js')
@@ -69,7 +74,8 @@ class IttecoTicketModule(Component):
                   'max_level':  levels and len(levels)-1 or 0,
                   'milestone_name' : milestone and milestone.parent or None,
                   'field_name' : 'parent'}
-            stream |=Transformer('//*[@id="target"]').after(chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
+            stream |=Transformer('//*[@id="edit"]/fieldset').append(
+                chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
             
         if 'ticket' in data:
             tkt = data['ticket']
@@ -78,17 +84,25 @@ class IttecoTicketModule(Component):
                  'field_name' : 'field_milestone',
                  'hide_completed' : not ( tkt.exists and 'TICKET_ADMIN' in req.perm(tkt.resource))
                  }
-            req.chrome.setdefault('ctxtnav',[]).insert(-1, tag.a(_('Open Containing Whiteboard'), href=req.href.whiteboard('team_tasks',data['ticket']['milestone'] or 'none')))
-            stream |=Transformer('//*[@id="field-milestone"]').replace(chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
+            req.chrome.setdefault('ctxtnav',[]).insert(
+                -1, tag.a(
+                    _('Open Containing Whiteboard'), 
+                    href=req.href.whiteboard('team_tasks', data['ticket']['milestone'] or 'none')))
+            stream |=Transformer('//*[@id="field-milestone"]').replace(
+                chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
 
         if 'ticket_links' in data:
             mydata = dict()
-            mydata['in_links'] = {'title':'Referred by:', 'blockid':'inblock', 'removable': False, 'links': self._ids_to_tickets(data['ticket_links'].incoming_links)}
-            mydata['out_links'] = {'title':'Refers to:', 'blockid':'outblock', 'removable': True, 'links': self._ids_to_tickets(data['ticket_links'].outgoing_links)}
+            mydata['in_links'] = {'title':'Referred by:', 'blockid':'inblock', 
+                'removable': False, 'links': self._ids_to_tickets(data['ticket_links'].incoming_links)}
+            mydata['out_links'] = {'title':'Refers to:', 'blockid':'outblock', 
+                'removable': True, 'links': self._ids_to_tickets(data['ticket_links'].outgoing_links)}
             mydata['wiki_links']= data['ticket_links'].wiki_links
             mydata['filters']=data.get('filters',[])
-            stream |=Transformer('//*[@id="ticket"]').append(chrome.render_template(req, 'itteco_links.html', mydata, fragment=True))
-            stream |=Transformer('//*[@id="content"]').after(chrome.render_template(req, 'itteco_search_pane.html', mydata, fragment=True));
+            stream |=Transformer('//*[@id="ticket"]').append(
+                chrome.render_template(req, 'itteco_links.html', mydata, fragment=True))
+            stream |=Transformer('//*[@id="content"]').after(
+                chrome.render_template(req, 'itteco_search_pane.html', mydata, fragment=True));
             stream |= Transformer('//*[@id="propertyform"]').append( \
                 tag(hidden_items('links_ticket', data['ticket_links'].outgoing_links), \
                     hidden_items('links_wiki', data['ticket_links'].wiki_links)))
@@ -113,7 +127,8 @@ class IttecoTicketModule(Component):
     def _get_search_filters(self, req):
         filters = []
         if TicketModule(self.env).get_search_filters(req) is not None:
-            filters += [{'name': ticket.name, 'label':ticket.name, 'active': True } for ticket in Type.select(self.env)]
+            filters += [{'name': ticket.name, 'label':ticket.name, 'active': True } 
+                for ticket in Type.select(self.env)]
         wikifilters = WikiModule(self.env).get_search_filters(req)
         if wikifilters:
             filters += [{'name': f[0], 'label':f[1], 'active': True } for f in wikifilters]
@@ -142,10 +157,10 @@ class JSonSearchtModule(Component):
                     ticket_type = match.group(2).strip()
                     if not req.args.has_key(ticket_type):
                         continue
-                    res['title']='%s %s:%s' % (ticket_type, match.group(1), match.group(3))
+                    res['title']=to_unicode('%s %s:%s' % (ticket_type, match.group(1), match.group(3)))
                     res['idx'] = '%02d' % all_types.index(ticket_type)
             else:
-                res['title'] = 'wiki: %s' % res['title'].split(':',2)[0]
+                res['title'] = to_unicode('wiki: %s' % res['title'].split(':',2)[0])
                 res['idx']=99
             filtered_res.append(res)
         

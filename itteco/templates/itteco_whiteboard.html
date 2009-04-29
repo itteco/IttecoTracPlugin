@@ -6,8 +6,16 @@
   <xi:include href="itteco_whiteboard_utils.html" />
  <head>
   <title>Milestone: ${current_mil_level or (milestone and milestone.name or 'Not Selected')} - ${board_type_title} - Whiteboard</title>
-  <script>
+  <script py:if="progress_field">
     ${render_js_config()}
+  </script>
+  <script py:if="burndown and milestone" py:with="amchart_dir = href.chrome('itteco', 'charts', 'amstock')">
+    $(document).ready(function(){
+		var so = new SWFObject("${amchart_dir}/amstock.swf", "amline", "100%", "400", "8", "#FFFFFF");
+		so.addVariable("path", "");
+		so.addVariable("settings_file", encodeURIComponent("${href.whiteboard('chart_settings', milestone)}"));
+		so.write("burndown");
+    });
   </script>
  </head> 
  <body>
@@ -32,7 +40,7 @@
             <span id="wb-section-info-view">
                 <strong>View:</strong> <span class="active_filter">${board_type_title}</span>
             </span>
-	        <span id="wb-section-info-members">
+	        <span id="wb-section-info-members" py:if="team">
 	            <strong>Team:</strong> ${team and len(team) or 0} member(s) / Selected: <span class="active_filter">All</span>
             </span>
             <span id="wb-section-info-levels" py:if="milestone_levels">
@@ -59,7 +67,7 @@
                 </ul>
             </div>
   
-            <div class="wb-panel-section" id="wb-section2">
+            <div class="wb-panel-section" id="wb-section2" py:if="team">
                 <strong>Team:</strong> / Selected: <span class="active_filter">All</span>
                 <ul filter_field="owner">
                     <li class="item-droppable" py:for="member in team" status="assigned" owner="${member}">
@@ -81,8 +89,8 @@
             </div>
             
             <div class="wb-panel-section" id="wb-section3" py:if="board_type!='stories'">
-                <strong>Milestone:</strong> <span id="milestones-selected">${(milestone and isinstance(milestone, list) and ", ".join(milestone))or 'Backlog (no milestone)'}</span>
-                ${render_milestones(milestones, 0)}
+                <strong>Milestone:</strong> <span id="milestones-selected">${(milestone and isinstance(milestone, list) and ", ".join(milestone) or milestone)or 'Backlog (no milestone)'}</span>
+                ${render_milestones(structured_milestones, 0, show_extras=(board_type!='burndown'))}
             </div>
 
             <div class="wb-panel-section" id="wb-section4" py:if="types">
@@ -97,8 +105,8 @@
     </div> 
     <!-- BOARD -->
     <div id="wb-board">
-    
-        <table id="whiteboard_table" class="whiteboard_table" width="100%">
+        <div id="burndown"></div>
+        <table id="whiteboard_table" class="whiteboard_table" width="100%" py:if="progress_field">
           <thead>
             <tr>
               <!-- FIRST-ITEM CLASS -->
@@ -131,7 +139,7 @@
         </table>
 	</div>
     <!-- STATUS -->
-    <p id="wb-status">Progress bars consider <strong>${progress_field['label']}</strong> progress.</p>
+    <p id="wb-status" py:if="progress_field">Progress bars consider <strong>${progress_field.label}</strong> progress.</p>
 
   </div>
   <div id="dyn_hint"/>

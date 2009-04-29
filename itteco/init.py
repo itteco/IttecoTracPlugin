@@ -1,3 +1,26 @@
+#Copyright (c) 2009 Itteco.com
+#
+#Permission is hereby granted, free of charge, to any person
+#obtaining a copy of this software and associated documentation
+#files (the "Software"), to deal in the Software without
+#restriction, including without limitation the rights to use,
+#copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the
+#Software is furnished to do so, subject to the following
+#conditions:
+#
+#The above copyright notice and this permission notice shall be
+#included in all copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+#OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+#HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+#WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+#FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+#OTHER DEALINGS IN THE SOFTWARE.
+
 import pkg_resources
 from trac.core import *
 from trac.config import ListOption
@@ -5,6 +28,7 @@ from trac.env import IEnvironmentSetupParticipant
 from trac.web.chrome import ITemplateProvider
 
 from itteco import __package__, __version__
+from itteco.ticket.api import IMilestoneChangeListener
 from itteco.utils.config import get_version, set_version, do_upgrade
 
 
@@ -12,7 +36,16 @@ class IttecoEvnSetup(Component):
     """ Initialise database and environment for itteco components """
     implements(IEnvironmentSetupParticipant,ITemplateProvider)
     
-    milestone_levels = ListOption('itteco-roadmap-config', 'milestone_levels',[])
+    milestone_levels = ListOption('itteco-roadmap-config', 'milestone_levels',[],
+        doc="All possible levels of hierarhial milestones.")
+
+    scope_element = ListOption('itteco-whiteboard-tickets-config', 'scope_element', ['story'],
+        doc="All tickets in a whiteboard would be grouped accorging their tracibility to this type of ticket")
+
+    excluded_element = ListOption('itteco-whiteboard-tickets-config', 'excluded_element', [],
+        doc="List of the ticket types, which should be excluded from the whiteboard.")
+
+    change_listeners = ExtensionPoint(IMilestoneChangeListener)
     #=============================================================================
     # IEnvironmentSetupParticipant
     #=============================================================================
