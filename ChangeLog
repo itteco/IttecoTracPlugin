@@ -1,4 +1,9 @@
 # Itteco Trac Plugin Changelog #
+IttecoTracPlugin 0.1.10 (May 5, 2009)
+* Burndown enhancements
+* Saving the context of the whiteboard
+* Populate whiteboard ticket groups info from workflow configuration
+
 IttecoTracPlugin 0.1.9 (April 30, 2009)
 * Add burndown support
 

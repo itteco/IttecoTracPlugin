@@ -3,7 +3,6 @@
   <font>Verdana</font>
   <font-size>10</font-size>
   <margins>0</margins>  
-  <legend_position>top</legend_position>
   <equal_spacing>false</equal_spacing>
 
   <number_format>  
@@ -85,7 +84,7 @@
         <graphs py:with="colors=['#ff3300','#3366cc','#00cc33','#ffcc00','#ff0099','#003366','#669933','#cc99cc','#333333','#99ff00']">
             <graph gid="burndown">
                 <type>line</type>
-                <title>Burndown</title>
+                <title>Remaining Scope</title>
                 <color>#BA0A00</color>
                 <bullet>round_outline</bullet>
                 <bullet_size>7</bullet_size>
@@ -102,7 +101,7 @@
             </graph>
             <graph gid="approximation">
                 <type>line</type>
-                <title>Approximation</title>
+                <title>Forecast</title>
                 <color>#3366cc</color>
                 <bullet>round_outline</bullet>
                 <bullet_size>7</bullet_size>
@@ -133,7 +132,7 @@
             </graph>
   			<graph gid="burnup">
   				<type>line</type>
-  				<title>Burnup</title>
+  				<title>Total Extra</title>
                 <color>#BA0A00</color>
   				<data_sources>
   				  <close>burnup</close>

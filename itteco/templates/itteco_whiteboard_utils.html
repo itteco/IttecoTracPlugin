@@ -9,9 +9,8 @@
         window.groups_config = {
         <py:for each="group in groups">
             "${group['name']}" : {
-            "src_statuses" : ${as_js_dict(group['source_status'])},
-            "statuses" : ${as_js_dict(group['status'])},
-            "action" : "${group['action']}"
+            "transitions" : { ${','.join('"%s":"%s"' % (old_state, trans['action']) for trans in group['transitions'] for old_state in trans['oldstates'])}},
+            "statuses" : ${as_js_dict(group['status'])}
             },
         </py:for>
             "x":1
@@ -43,10 +42,12 @@
                 <li py:if="level==0 and show_extras"><a href="${href.whiteboard(board_type, 'not_completed_milestones')}">All active milestones</a></li>
                 <form id="mils_options"  py:if="level==0">
                 <div class="milestones-options" py:if="show_extras">
-                    <input id="sub_mils_switch" type="checkbox" name="include_sub_mils" checked="${include_sub_mils and 'checked' or None}" onchange="$('#mils_options').submit();"/><label for="sub_mils_switch">Include tickets from sub-milestones</label>
+                    <input type="hidden" name="include_sub_mils" value="off"/>
+                    <input id="sub_mils_switch" type="checkbox" name="include_sub_mils" checked="${include_sub_mils and 'checked' or None}" /><label for="sub_mils_switch">Include tickets from sub-milestones</label>
                 </div>
                 <div class="milestones-options">
-                    <input id="complete_mils_switch" type="checkbox" name="show_closed_milestones" checked="${show_closed_milestones and 'checked' or None}" onchange="$('#mils_options').submit();"/><label for="complete_mils_switch">Show already completed milestones</label>
+                    <input type="hidden" name="show_closed_milestones" value="off"/>
+                    <input id="complete_mils_switch" type="checkbox" name="show_closed_milestones" checked="${show_closed_milestones and 'checked' or None}"/><label for="complete_mils_switch">Show already completed milestones</label>
                 </div>
                 </form>
 

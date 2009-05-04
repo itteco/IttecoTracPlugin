@@ -18,8 +18,9 @@ def get_tickets_by_ids(db, fields, ids):
     
 def get_tickets_by_filter(db, fields, **kwargs):
     cursor = db.cursor()
-    name_and_type = fields and [(f['name'], f.get('custom')) for f in fields] or []
-    name_and_type += [('id',0),('status',0), ('type',0)]
+    name_and_type = set(
+        (fields and [(f['name'], f.get('custom')) for f in fields] or []) + \
+        [('id',0),('status',0), ('type',0)])
     
     selected_fields= []
     from_part = " FROM ticket t"

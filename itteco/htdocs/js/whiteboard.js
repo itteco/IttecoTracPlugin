@@ -1,5 +1,69 @@
 var draggable_options ={helper: 'clone', handle: '.drag_handle', opacity: 0.8, 'start' : function(e, ui){ui.helper.css('width',this.offsetWidth+'px');}};
-var wbContext = {filter: {field: new Object(), attr: new Object()}};
+function WBContext(){
+    this.filter = {field: new Object(), attr: new Object()};
+    this.cpVisible = false;
+    this._save = function(){
+        var strVal = "";
+        var attrs = wbContext.filter.attr;
+        for (var a in attrs){
+          if (attrs[a]) strVal +='&filter$attr$'+a+'='+attrs[a];
+        }	
+        var fields = wbContext.filter.field;
+        for (var f in fields){
+          if (fields[f]) strVal +='&filter$field$'+f+'='+fields[f];
+        }
+        strVal+='&cpVisible='+this.cpVisible;
+        if(strVal.length>0){
+            strVal = strVal.substring(1,strVal.length);            
+        }
+        $.cookies.set('whiteboardDatabag', strVal);
+    }
+    this.load = function(){
+        var strVal = $.cookies.get('whiteboardDatabag');
+        if(strVal){
+            var params = strVal.split('&');
+            for each (var p in params){
+                var kw = p.split('=');
+                var path = kw[0].split('$');
+                if(kw.length>1){
+                    var len = path.length-1;
+                    var obj = this;
+                    var i =0;
+                    while(i<len && obj){
+                        if(!obj[path[i]]){
+                            obj[path[i]]={};
+                        }
+                        obj = obj[path[i]];
+                        i++;
+                    }
+                    if(obj){
+                        obj[path[len]] = kw[1];
+                    }
+                }
+            }
+        }
+    }
+    this.setFilter = function(type, name, value){
+        if (type=='field'){
+            this.filter.field[name]=value;
+        }else{
+            this.filter.attr[name]=value;
+        }
+        this._save();
+    }
+    this.toggleControlPanel = function(){
+        if(this.cpVisible==true || this.cpVisible=='true'){
+            this.cpVisible = false;
+        }else{
+            this.cpVisible = true;
+        }
+        this._save();
+        return false;
+    }
+}
+var wbContext = new WBContext();
+
+
 update_cell = function(cell, ignore_id){
     var row_stat = cell.siblings('.group_holder');
     var group_filter ="[status='"+ cell.attr('status')+"']";
@@ -151,6 +215,10 @@ toggleRowCollapse=function(head_widget){
         expandRow(head_widget);
     }
 }
+toggleControlPanel=function(){
+    $('#wb-sections, #wb-section-info').add($("#wb-panel-button").children()).toggle();
+    return wbContext.toggleControlPanel();;
+}
 change_ticket_view=function(ticket, view){
     $("div.block", ticket).addClass('hidden');
     $('div.'+view, ticket).removeClass('hidden');
@@ -182,10 +250,18 @@ teamMemberPrepare=function(ticket, member) {
     var data = {'ticket':idx, 'tkt_action':'reassign',
          'owner': member.attr('owner'),
          'action_reassign_reassign_owner':member.attr('owner')};
-    var newTarget = ticket.parent().siblings('td[action]').andSelf().filter('[action="reassign"]')
+    var group;
+    for (var gCfg in window.groups_config){
+        if(window.groups_config[gCfg]['statuses']['assigned']){
+            group =gCfg;
+            break;
+        }
+    }
+    var newTarget = ticket.parent().siblings('td').add(ticket.parent()).filter('[status="'+group+'"]')
     update_cell(ticket.parent(), idx);
     var copy = ticket.remove().draggable(draggable_options);
     newTarget.append(copy);
+    console.log('append to', newTarget);
     return {'ticket': copy, 'data':data};
 }
 
@@ -193,6 +269,7 @@ defaultPostprocess = function(ticket, data){
     if (data.result=='done'){
         var mil = data.milestone;
         var parent = ticket.parent();
+        console.log('milestone', mil);
         if(typeof(mil)=='undefined' || current_milestone[mil] || !ticket.hasClass('draggable')){
             for(var key in data){
                 $('[field_name="'+key+'"]', ticket).text(data[key]);
@@ -219,7 +296,10 @@ getActionToPerform = function(group_name, ticket_status){
     if (typeof(groups_config) == 'undefined') return;
     var group_cfg = groups_config[group_name];
     if (group_cfg && !group_cfg['statuses'][ticket_status]){
-        return group_cfg['action'];
+        var trans = group_cfg['transitions'];
+        if(trans){
+            return trans[ticket_status];
+        }        
     }
 }    
 
@@ -232,7 +312,7 @@ acceptTicket = function(draggable){
     if (typeof(groups_config) == 'undefined') return false;
     var group_cfg = groups_config[group_name];
     if (typeof(group_cfg) == 'undefined') return false;
-    return  group_cfg['src_statuses'][source_status];
+    return  group_cfg['transitions'][source_status];
 }
 
 acceptByTeamMember = function(draggable){
@@ -243,32 +323,32 @@ acceptByTeamMember = function(draggable){
     var status= draggable.attr('status');
     var group_cfg = cfg[dest_group_name];
     if (typeof(group_cfg) == 'undefined') return false;
-    return  group_cfg['src_statuses'][status];
+    return  group_cfg['transitions'][status];
 }
-filterTicketsByField = function(e){
+    
+toggleTicketsFilter = function(e){
     var o = $(this);
-    var field = o.parent().parent().attr('filter_field');
-    wbContext.filter.field[field]=o.parent().attr(field);
-    $(".active_filter", o.parents(".wb-panel-section").add(e.data.selector)).text(o.text());
+    var by = e.data.filterBy;
+    var field = o.parent().parent().attr('filter');
+    wbContext.setFilter(by, field, o.parent().attr(field));
     filterTickets();
 }
 
-filterTicketsByAttr = function(){
-    var o = $(this);
-    var attr_name = o.parent().parent().attr('filter_attr');
-    wbContext.filter.attr[attr_name]=o.parent().attr(attr_name);
-    $(".active_filter", o.parents(".wb-panel-section")).text(o.text());
-    filterTickets();
-}
 filterTickets = function(){
-    var sel ="";
+    var sel ="";    
     var attrs = wbContext.filter['attr'];
     for (var a in attrs){
-      if (attrs[a]) sel +='['+a+'="'+attrs[a]+'"]';
+      if (attrs[a]) {
+        sel +='['+a+'="'+attrs[a]+'"]';
+      }
+      $('.active_filter[filter="'+a+'"]').text($('ul[filter="'+a+'"] > li['+a+'="'+attrs[a]+'"]').eq(0).text());
     }	
     var fields = wbContext.filter['field'];
     for (var f in fields){
-      if (fields[f]) sel +=':has([field_name="'+f+'"]:contains("'+fields[f]+'"))';       
+      if (fields[f]){
+        sel +=':has([field_name="'+f+'"]:contains("'+fields[f]+'"))';
+      }
+      $('.active_filter[filter="'+f+'"]').text($('ul[filter="'+f+'"] > li['+f+'="'+fields[f]+'"]').eq(0).text());
     }
     if(sel!=""){
       $(".draggable").filter(sel).show();
@@ -292,14 +372,14 @@ putIntoAccordion = function(ticket){
     $(".drag_handle", ticket).bind('click', function(e){activateAccordionElement(e.target)});
 }
 removeFromAccordion = function(ticket){
-    $(".drag_handle", ticket).unbind('click');
+    $('.drag_handle', ticket).unbind('click');
     $('.body', t).show();
 }
 activateAccordionElement = function(handle){
     var h = $(handle)
     var t = h.hasClass('widget') ? h : h.parent();
     $('.body', t.siblings()).hide();
-    t.removeClass("tiny_widget");
+    t.removeClass('tiny_widget');
     $('.body', t).show();
     change_ticket_view(t,'summary');
 }
@@ -315,20 +395,45 @@ make_droppable = function(obj, acceptCheck, prepare, postprocess){
     obj.droppable({ accept: acceptCheck, activeClass: 'droppable-active', hoverClass: 'droppable-hover', drop: createDropFunction(prepare, postprocess)});
 }
 
-$(document).ready(function(){
-    enableAllAccordions();
-    $('a',$('#wb-section2')).bind('click', {selector:'#wb-section-info-members'}, filterTicketsByField);
-    $('a',$('#wb-section4')).bind('click', filterTicketsByAttr);
+bindEventHandlers = function (){
+    $('a',$('#wb-section2')).bind('click', {filterBy:'field', selector:'#wb-section-info-members'}, toggleTicketsFilter);
+    $('a',$('#wb-section4')).bind('click', {filterBy:'attr'}, toggleTicketsFilter);    
     //expand collapse rows
-    $("th .widget .title",$('#whiteboard_table')).bind('click', function(){toggleRowCollapse($(this).parent())});
-    $("th.first-item",$('#whiteboard_table')).bind('click', function(){var o=$(this);o.toggleClass('active');if(o.hasClass('active')){expandAllRows()}else{collapseAllRows()};});    
-    //fix navigation
-    $("a", $("#wb-section3")).attr("href", function(i){return $(this).attr("href")+document.location.search;});
-    calcAllAggregates();
-    $(".item-droppable", $("#wb-section2")).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});
-    $(".draggable").draggable(draggable_options);
-    $(".widget").each(function(i){colorizeWidget($(this))});
+    $('th .widget .title',$('#whiteboard_table')).bind('click', function(){toggleRowCollapse($(this).parent())});
+    $('th.first-item',$('#whiteboard_table')).bind('click', function(){var o=$(this);o.toggleClass('active');if(o.hasClass('active')){expandAllRows()}else{collapseAllRows()};});
+    $('#wb-panel-button').bind('click', toggleControlPanel);
+}
+enableDragAndDrop = function(){
+    $('.item-droppable', $('#wb-section2')).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});
+    $('.draggable').draggable(draggable_options);
+}
+colorizeWidgets = function(){
+    $('.widget').each(function(i){colorizeWidget($(this))});
+}
+setupAjax = function(){
     $('#wb-error-panel').ajaxError(function(event, request, settings){
         $(this).append("<li>Error performing action: " + settings.url + "</li>");
     });
+}
+loadContext = function(){
+    wbContext.load();
+    filterTickets();
+    if(wbContext.cpVisible=='true'){
+        wbContext.cpVisible =false;
+        toggleControlPanel();
+    }
+}
+modifyMilestonesTree = function(){
+    var form = $('#mils_options');
+    form.bind('submit', function(){$(':checkbox:checked', form).prev().remove();});
+    $(':checkbox', form).bind('change', function(){form.trigger('submit');});
+}
+$(document).ready(function(){
+    bindEventHandlers();
+    enableAllAccordions();
+    enableDragAndDrop();
+    colorizeWidgets();
+    setupAjax();
+    modifyMilestonesTree();
+    loadContext();
 });
