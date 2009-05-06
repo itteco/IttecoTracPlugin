@@ -22,7 +22,7 @@ function WBContext(){
         var strVal = $.cookies.get('whiteboardDatabag');
         if(strVal){
             var params = strVal.split('&');
-            for each (var p in params){
+            for (var p in params){
                 var kw = p.split('=');
                 var path = kw[0].split('$');
                 if(kw.length>1){
