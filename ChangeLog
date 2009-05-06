@@ -1,4 +1,7 @@
 # Itteco Trac Plugin Changelog #
+IttecoTracPlugin 0.1.11 (May 7, 2009)
+* Added possibility to create tickets on a whiteboard
+
 IttecoTracPlugin 0.1.10 (May 5, 2009)
 * Burndown enhancements
 * Saving the context of the whiteboard

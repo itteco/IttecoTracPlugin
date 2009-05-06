@@ -16,18 +16,19 @@ function WBContext(){
         if(strVal.length>0){
             strVal = strVal.substring(1,strVal.length);            
         }
+
         $.cookies.set('whiteboardDatabag', strVal);
     }
     this.load = function(){
         var strVal = $.cookies.get('whiteboardDatabag');
         if(strVal){
-            var params = strVal.split('&');
-            for (var p in params){
-                var kw = p.split('=');
+            var pointer = this;
+            $.each(strVal.split('&'), function(){
+                var kw = this.split('=');
                 var path = kw[0].split('$');
                 if(kw.length>1){
                     var len = path.length-1;
-                    var obj = this;
+                    var obj = pointer;
                     var i =0;
                     while(i<len && obj){
                         if(!obj[path[i]]){
@@ -40,7 +41,7 @@ function WBContext(){
                         obj[path[len]] = kw[1];
                     }
                 }
-            }
+            })
         }
     }
     this.setFilter = function(type, name, value){
@@ -62,7 +63,6 @@ function WBContext(){
     }
 }
 var wbContext = new WBContext();
-
 
 update_cell = function(cell, ignore_id){
     var row_stat = cell.siblings('.group_holder');
@@ -261,7 +261,6 @@ teamMemberPrepare=function(ticket, member) {
     update_cell(ticket.parent(), idx);
     var copy = ticket.remove().draggable(draggable_options);
     newTarget.append(copy);
-    console.log('append to', newTarget);
     return {'ticket': copy, 'data':data};
 }
 
@@ -269,7 +268,6 @@ defaultPostprocess = function(ticket, data){
     if (data.result=='done'){
         var mil = data.milestone;
         var parent = ticket.parent();
-        console.log('milestone', mil);
         if(typeof(mil)=='undefined' || current_milestone[mil] || !ticket.hasClass('draggable')){
             for(var key in data){
                 $('[field_name="'+key+'"]', ticket).text(data[key]);
@@ -428,12 +426,64 @@ modifyMilestonesTree = function(){
     form.bind('submit', function(){$(':checkbox:checked', form).prev().remove();});
     $(':checkbox', form).bind('change', function(){form.trigger('submit');});
 }
+setupTicketCreation = function(){
+    var template = $('#new_ticket_template');
+    var clonner = template.clone().attr('id','new_ticket-clonner').appendTo($('#hidden_container'));
+    $(".summary .parameter:has([field_name='summary'],[field_name='description'], [field_name='type'])", clonner).remove();
+    $(".edit .parameter:has([name='field_summary'],[name='field_description'], [name='field_type'])", clonner).remove();
+    change_ticket_view(template,'edit');
+
+    function showDialog(){
+        template.css('display','block').dialog({
+            modal:true, 
+            height: 400,
+            overlay:{'opacity':'0.5', 'background-color':'#CACACA'}, 
+            close: function(event, ui){$(this).dialog('destroy');}});    
+    }
+    function postprocessTicketCreation(ticket, data){
+        defaultPostprocess(ticket, data);
+        if(data.result=='done'){
+            var head = $('.title a', ticket);
+            var href = head.attr('href');
+            var tkt_id =data['ticket'];
+            ticket.attr('idx', tkt_id).attr('id', 'ticket_'+tkt_id);
+            href = href.substring(href.length-3)+tkt_id;
+            head.attr('href',href).text('#'+tkt_id);
+            head.next().text(data['summary']);
+            $(':hidden[name="ticket"]', ticket).val(tkt_id);
+        }
+    }
+    /*add buttons for ticket creation*/
+    $("<a class='append_button' href='#'>Add Ticket</a>").bind('click', function(){
+        var o = $(this);
+        $(':hidden[name="new_story"]', template).val(o.parent().attr('idx'));
+        showDialog();
+        return false;
+    }).appendTo($('#whiteboard_table tbody th'));
+    /*setup ticket editor*/
+    $('.views, .hidden', template).remove();
+    $('form', template).attr('onsubmit','').append('<input type="hidden" name="new_story"/>').bind(
+        'submit',function(){
+            var targetObj= $(':hidden[name="new_story"]', this);
+            var targetVal = $(':hidden[name="new_story"]', this).val();
+            var widget=$('.widget',clonner).clone().appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
+            if(isNaN(parseInt(targetVal))){
+                targetObj.val('');
+            }
+            widget.addClass('draggable').draggable(draggable_options);
+            save_ticket_changes(widget,$(this).serialize(), postprocessTicketCreation);
+            template.dialog('destroy');
+            return false;});
+        
+    $(':button', template).attr('onclick','').bind('click', function(){$(this).parents('form').triggerHandler('reset');template.dialog('destroy');});    
+}
 $(document).ready(function(){
+    setupAjax();
     bindEventHandlers();
     enableAllAccordions();
     enableDragAndDrop();
     colorizeWidgets();
-    setupAjax();
     modifyMilestonesTree();
+    setupTicketCreation();
     loadContext();
 });

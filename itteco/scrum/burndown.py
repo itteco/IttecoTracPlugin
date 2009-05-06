@@ -91,14 +91,9 @@ class AbstractBurndownInfoProvider(Component):
     
     def _work_types(self):
         """ Returns ticket types that are taken into consideration 
-        while counting milestone progress """
-        
-        scope_types = IttecoEvnSetup(self.env).scope_element
-        ignore_types = set(scope_types) \
-            | set(IttecoEvnSetup(self.env).excluded_element) \
-            | set(self.initial_plan_element)
-        return [type.name for type in Type.select(self.env) if type.name not in ignore_types]
-
+        while counting milestone progress """        
+        return list(set(IttecoEvnSetup(self.env).work_element) - \
+            set(self.initial_plan_element))
         
     def metrics(self, milestone):
         mil = StructuredMilestone(self.env, milestone)

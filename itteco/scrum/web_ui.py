@@ -200,8 +200,9 @@ class DashboardModule(Component):
             board_type = _get_req_param(req, 'board_type', 'team_tasks')
             add_stylesheet(req, 'common/css/roadmap.css')
             add_stylesheet(req, 'itteco/css/common.css')
-
+            add_stylesheet(req, 'itteco/css/jquery.ui/themes/flora/flora.dialog.css')
             add_script(req, 'itteco/js/jquery.ui/ui.core.js')
+            add_script(req, 'itteco/js/jquery.ui/ui.dialog.js')
             add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
             add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
             add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
@@ -219,7 +220,7 @@ class DashboardModule(Component):
                 'resolutions':[val.name for val in Resolution.select(self.env)],
                 'team' : self.team_members_provider and self.team_members_provider.get_team_members() or []}
                 
-            for target, title in [('team_tasks', _('Team Tasks')), ('stories', _('Stories')), ('burndown', _('Remaining Scope'))]:
+            for target, title in [('team_tasks', _('Team Tasks')), ('stories', _('Stories')), ('burndown', _('Burndown'))]:
                 add_whiteboard_ctxtnav(data, title, req.href.whiteboard(target), class_= board_type==target and "active" or '')
                 if board_type==target:
                     data['board_type_title'] = title
@@ -294,6 +295,9 @@ class DashboardModule(Component):
             if not scope_item_found:
                 append_ticket(tkt_info, tkt_group)
         data['wb_items'] = wb_items
+        
+        data['new_ticket_descriptor'] = self._get_new_ticket_descriptor(
+            IttecoEvnSetup(self.env).work_element, self.work_element_weight_field, max_work_item_weight)
         def mkey(x):
             f = self.scope_element_weight_field or 'id'
             key = x and x['id']
@@ -304,6 +308,34 @@ class DashboardModule(Component):
             return key
                 
         data['row_items_iterator']= sorted([s['scope_item'] for s in wb_items.values()], key=mkey)
+
+    def _get_new_ticket_descriptor(self, types, weight_field, max_item_weight):
+        common_descriptor = {'ticket' : {'id':'new'}}
+        self._add_rendering_properties(None, weight_field, max_item_weight, common_descriptor)
+
+        if types:
+            for type in types:
+                type_descriptor = {'ticket' : {'id':'new', 'type':type}}
+                self._add_rendering_properties(
+                    type, \
+                    weight_field, \
+                    max_item_weight, \
+                    type_descriptor)
+                common_descriptor.setdefault('fields',[]).extend(type_descriptor.get('fields',[]))
+            extra_types = self._get_ticket_fields(['summary','description','type'])
+            if extra_types:
+                ticket_type_field = extra_types[-1]
+                if ticket_type_field['type'] =='select':
+                    ticket_type_field['options'] = [o for o in ticket_type_field['options'] if o in types]
+            all_fields = extra_types + common_descriptor['fields']
+            unique_fields = []
+            found_names = []
+            for field in all_fields:
+                if field['name'] not in found_names:
+                    found_names.append(field['name'])
+                    unique_fields.append(field)
+            common_descriptor['fields'] = unique_fields
+        return common_descriptor
 
             
     def _add_storyboard_data(self, req, data):
@@ -354,6 +386,9 @@ class DashboardModule(Component):
             if not wb_items.has_key(mil):
                 wb_items[mil] = {'fields':milestone_sum_fields}
         data['wb_items'] = wb_items
+        data['new_ticket_descriptor'] = self._get_new_ticket_descriptor(
+            IttecoEvnSetup(self.env).scope_element, self.scope_element_weight_field, max_scope_item_weight)
+
     
     def _get_milestones_by_level(self, mils_tree, level_name, include_completed = False):
         mils =[]
@@ -407,9 +442,15 @@ class DashboardModule(Component):
             
     def _perform_action(self, req):
         action = req.args['action']
-        ticket = Ticket(self.env, req.args['ticket'])
-        assert ticket.exists, 'Ticket should exist'
-        assert 'TICKET_CHGPROP' in req.perm(ticket.resource), 'No permission to change ticket fields.'
+        ticket_id = req.args['ticket']
+        ticket = None
+        if ticket_id=='new':
+            ticket = Ticket(self.env)
+            assert 'TICKET_CREATE' in req.perm(ticket.resource), 'No permission to create tickets.'
+        else:
+            ticket = Ticket(self.env, ticket_id)
+            assert ticket.exists, 'Ticket should exist'
+            assert 'TICKET_CHGPROP' in req.perm(ticket.resource), 'No permission to change ticket fields.'
         data = {'result':'done'}
         db = self.env.get_db_cnx()
         if action=='change_task':
@@ -431,7 +472,14 @@ class DashboardModule(Component):
                     for key in field_changes:
                         data[key] = ticket[key]
                 data['status'] = ticket['status']
-            ticket.save_changes(get_reporter_id(req, 'author'), None, db=db)
+            if ticket.exists:
+                ticket.save_changes(get_reporter_id(req, 'author'), None, db=db)
+            else:
+                ticket['status']='new'
+                ticket['reporter']=ticket['owner']
+                ticket.insert(db=db)
+                data['status']=ticket['status']
+                data['ticket']=ticket.id
             
             new_story = req.args.get('new_story')
             old_story = req.args.get('old_story')
@@ -495,10 +543,10 @@ class DashboardModule(Component):
     def _add_rendering_properties(self, ticket_type, field_name, max_weight, props):
         tkt_cfg = self.ticket_type_config
         if tkt_cfg:
+            props['weight_field_name']=field_name
+            props['max_weight']=max_weight
             cfg = tkt_cfg.get(ticket_type)
             if cfg:
-                props['weight_field_name']=field_name
-                props['max_weight']=max_weight
                 props.update(cfg)
 
     def _get_stats_config(self):

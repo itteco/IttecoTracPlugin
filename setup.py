@@ -16,7 +16,9 @@ setup(
     license='MIT',
     packages=find_packages(),
     package_data={
-        'itteco': ['templates/*', 'htdocs/images/*', 'htdocs/css/*', 
+        'itteco': ['templates/*', 'htdocs/images/*', 'htdocs/css/*.css', 
+            'htdocs/css/jquery.ui/themes/flora/*.css', 
+            'htdocs/css/jquery.ui/themes/flora/i/*', 
             'htdocs/js/jquery.ui/*','htdocs/js/*.js', 
             'htdocs/charts/amstock/*.swf'],
                   'itteco.config': ["*.ini"]},

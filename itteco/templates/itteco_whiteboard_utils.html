@@ -76,6 +76,10 @@
                     py:content="option"></option>
           </optgroup>
         </select>
+        <textarea py:when="'textarea'" id="field-${field.name}" name="field_${field.name}"
+                  cols="${field.width or 40}" rows="${field.height or 4}"
+                  class="${field.format == 'wiki' and 'wikitext' or None}"
+                  py:content="value"></textarea>
         <span py:when="'checkbox'">
           <input type="checkbox" id="field-${field.name}" name="field_${field.name}"
                  checked="${ticket[field.name] == '1' and 'checked' or None}" value="1" />

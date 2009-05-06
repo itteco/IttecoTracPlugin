@@ -37,7 +37,7 @@
 	background: rgb(207, 212, 230) none repeat scroll 0% 0%;
 }
 
-.draggable { border-style: solid; border-color: rgb(179, 179, 141) rgb(114, 114, 76) rgb(114, 114, 76) rgb(179, 179, 141); border-width: 1px; padding: 1px; background-image: url('../images/ticket-corner.png'); background-repeat: no-repeat; background-position: right bottom; margin-bottom: 10px; background-color: rgb(255, 255, 221); color: rgb(86, 86, 43); }
+.draggable { border-style: solid; border-color: rgb(179, 179, 141) rgb(114, 114, 76) rgb(114, 114, 76) rgb(179, 179, 141); border-width: 1px; padding: 1px; background-image: url(./../images/ticket-corner.png); background-repeat: no-repeat; background-position: right bottom; margin-bottom: 10px; background-color: rgb(255, 255, 221); color: rgb(86, 86, 43); }
 
 .draggable_inactive {
 	border: 1px outset rgb(153, 153, 102);
@@ -327,40 +327,6 @@ table.whiteboard_table tbody tr.odd td {
 	padding-right: 5px;
 	color: black;
 }
-
-/*
-
-.custom_drop_down {
-	border: 1px solid rgb(102, 102, 102);
-	overflow: hidden;
-	height: 15px;
-	cursor: pointer;
-	background-image: url('open.gif');
-	background-repeat: no-repeat;
-	background-position: right top;
-}
-
-.custom_drop_down_box {
-	border: 1px solid rgb(102, 102, 102);
-	background: rgb(255, 255, 255) none repeat scroll 0% 0%;
-	overflow: auto;
-	position: absolute;
-	height: 100px;
-	cursor: pointer;
-	display: none;
-}
-
-.focused_drop_down_item {
-	background: rgb(204, 202, 204) none repeat scroll 0% 0%;
-}
-
-.selected_drop_down_item {
-	background: rgb(207, 212, 230) none repeat scroll 0% 0%;
-}
-*/
-
-
-
 
 .widget .status-icon {
 	width: 15px;
@@ -886,3 +852,13 @@ table.whiteboard_table tbody tr.odd td {
 .completed_milestone {
     text-decoration: line-through;
 }
+.append_button{
+	border: none;
+	color: black;
+	display: block;
+    float:right;
+	padding: 20px 4px 3px 4px;
+	line-height: 100%;
+    background-image: url(./../images/add.png) no-repeat;
+}
+#new_ticket_template{ display:none;}

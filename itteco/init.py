@@ -25,6 +25,7 @@ import pkg_resources
 from trac.core import *
 from trac.config import ListOption
 from trac.env import IEnvironmentSetupParticipant
+from trac.ticket.model import Type
 from trac.web.chrome import ITemplateProvider
 
 from itteco import __package__, __version__
@@ -45,10 +46,18 @@ class IttecoEvnSetup(Component):
     excluded_element = ListOption('itteco-whiteboard-tickets-config', 'excluded_element', [],
         doc="List of the ticket types, which should be excluded from the whiteboard.")
 
+    work_element = property(lambda self: self._get_work_elements())
+    
     change_listeners = ExtensionPoint(IMilestoneChangeListener)
-    #=============================================================================
+    
+    def _get_work_elements(self):
+        """ Returns ticket types that are taken into consideration 
+        while counting milestone progress """        
+        ignore_types = set(self.scope_element) \
+            | set(self.excluded_element) 
+        return [type.name for type in Type.select(self.env) if type.name not in ignore_types]
+
     # IEnvironmentSetupParticipant
-    #=============================================================================
     def environment_created(self):
         self.upgrade_environment(self.env.get_db_cnx())
     
