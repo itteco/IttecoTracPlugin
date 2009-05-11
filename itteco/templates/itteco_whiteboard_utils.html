@@ -25,7 +25,14 @@
             "css_class" : "${config['css_class']}"},
         </py:for>
             "x":1
-        }; 
+        };
+        window.ticket_rendering_config = {
+        <py:for each="tkt_type in ticket_type_rendering_config">
+            "$tkt_type" : {${",".join(['"%s":"%s"' % (key, ticket_type_rendering_config[tkt_type][key]) for key in ticket_type_rendering_config[tkt_type]])}},
+        </py:for>
+            "x":1
+        };
+
         window.stats_status_to_group = {${','.join(["'%s':'%s'" % (s, cfg['name']) for cfg in stats_config for s in cfg['statuses']])}};
         window.actionUrl = "${href.whiteboard('modify')+'?action=change_task'}";        
      </div>

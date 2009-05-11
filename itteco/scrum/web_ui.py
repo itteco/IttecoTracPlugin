@@ -95,24 +95,37 @@ class DashboardModule(Component):
         if self._old_ticket_config!=ticket_config:
             default_fields = ticket_config.getlist('default_fields')
 
-            types = [ type.name for type in Type.select(self.env)]
-            self.env.log.debug("ticket_config-types '%s'" % types)
+            allowed_tkt_types = [ type.name for type in Type.select(self.env)]
             _ticket_type_config = {}
             for option in ticket_config:
                 try:
                     tkt_type, prop = option.split('.',1)
-                    if tkt_type in types:
+                    if tkt_type in allowed_tkt_types:
                         _ticket_type_config.setdefault(tkt_type, {'fields':default_fields})[prop] = ticket_config.get(option)
                 except ValueError :
                     pass
 
-            keys =  _ticket_type_config.keys()
-            for type in types:
-                if type not in keys:
+            scope_types = IttecoEvnSetup(self.env).scope_element
+            scope_element_field_name = self.scope_element_weight_field
+            scope_element_max_weight = self._get_max_weight(scope_element_field_name)
+            
+            work_types = IttecoEvnSetup(self.env).work_element
+            work_element_field_name = self.work_element_weight_field
+            work_element_max_weight = self._get_max_weight(work_element_field_name)
+            
+            for type in allowed_tkt_types:
+                if type not in _ticket_type_config:
                     _ticket_type_config[type]={'fields':default_fields}
-
-            for key in  _ticket_type_config.keys():
-                _ticket_type_config[key]['fields']=self._get_ticket_fields(_ticket_type_config[key].get('fields'))
+                if type in scope_types:
+                    _ticket_type_config[type].update({
+                        'weight_field_name':scope_element_field_name, \
+                        'max_weight':scope_element_max_weight})
+                else:
+                    _ticket_type_config[type].update({
+                        'weight_field_name':work_element_field_name, \
+                        'max_weight':work_element_max_weight})
+                _ticket_type_config[type]['fields']=self._get_ticket_fields(
+                    _ticket_type_config[type].get('fields'))
                     
             self._ticket_type_config = _ticket_type_config
             self._old_ticket_config=ticket_config
@@ -216,6 +229,7 @@ class DashboardModule(Component):
             data ={'board_type' : board_type,
                 'stats_config': self._get_stats_config(),
                 'groups': self.ticket_groups,
+                'ticket_type_rendering_config': self.ticket_type_config,
                 'show_closed_milestones':req.args.get('show_closed_milestones', False),
                 'resolutions':[val.name for val in Resolution.select(self.env)],
                 'team' : self.team_members_provider and self.team_members_provider.get_team_members() or []}
@@ -271,9 +285,7 @@ class DashboardModule(Component):
             if not wb_items.has_key(id):
                 wb_items[id] = self._get_empty_group()
                 wb_items[id]['scope_item']=scope_item
-                self._add_rendering_properties(scope_item['type'], self.scope_element_weight_field, max_scope_item_weight, wb_items[id])
             tkt_dict = {'ticket' : ticket}
-            self._add_rendering_properties(ticket['type'], self.work_element_weight_field, max_work_item_weight, tkt_dict)
             wb_items[id].setdefault(tkt_group, []).append(tkt_dict)
             
         active_tkt_types = (all_tkt_types | set([t for t in IttecoEvnSetup(self.env).scope_element])) - set([t for t in IttecoEvnSetup(self.env).excluded_element])
@@ -281,7 +293,6 @@ class DashboardModule(Component):
             if tkt_info['type'] in IttecoEvnSetup(self.env).scope_element:
                 sid = tkt_info['id']
                 wb_items.setdefault(sid, self._get_empty_group())['scope_item']=tkt_info
-                self._add_rendering_properties(tkt_info['type'], self.scope_element_weight_field, max_scope_item_weight, wb_items[sid])
                 continue
             tkt_group = self._get_ticket_group(tkt_info)
             scope_item_found = False
@@ -297,7 +308,7 @@ class DashboardModule(Component):
         data['wb_items'] = wb_items
         
         data['new_ticket_descriptor'] = self._get_new_ticket_descriptor(
-            IttecoEvnSetup(self.env).work_element, self.work_element_weight_field, max_work_item_weight)
+            IttecoEvnSetup(self.env).work_element)
         def mkey(x):
             f = self.scope_element_weight_field or 'id'
             key = x and x['id']
@@ -309,19 +320,15 @@ class DashboardModule(Component):
                 
         data['row_items_iterator']= sorted([s['scope_item'] for s in wb_items.values()], key=mkey)
 
-    def _get_new_ticket_descriptor(self, types, weight_field, max_item_weight):
-        common_descriptor = {'ticket' : {'id':'new'}}
-        self._add_rendering_properties(None, weight_field, max_item_weight, common_descriptor)
+    def _get_new_ticket_descriptor(self, types):
+        ticket = Ticket(self.env)
+        ticket.id = 'new'
+        common_descriptor = {'ticket' : ticket}
 
         if types:
             for type in types:
-                type_descriptor = {'ticket' : {'id':'new', 'type':type}}
-                self._add_rendering_properties(
-                    type, \
-                    weight_field, \
-                    max_item_weight, \
-                    type_descriptor)
-                common_descriptor.setdefault('fields',[]).extend(type_descriptor.get('fields',[]))
+                common_descriptor.setdefault('fields',[]). \
+                    extend(self.ticket_type_config[type].get('fields',[]))
             extra_types = self._get_ticket_fields(['summary','description','type'])
             if extra_types:
                 ticket_type_field = extra_types[-1]
@@ -375,7 +382,6 @@ class DashboardModule(Component):
                 wb_items[id] = self._get_empty_group()
                 wb_items[id]['fields']=milestone_sum_fields
             tkt_dict = {'ticket' : ticket}
-            self._add_rendering_properties(ticket['type'], self.scope_element_weight_field, max_scope_item_weight, tkt_dict)
             wb_items[id].setdefault(tkt_group, []).append(tkt_dict)
             
         for tkt_info in self._get_ticket_info(milestone, IttecoEvnSetup(self.env).scope_element, req):
@@ -387,7 +393,7 @@ class DashboardModule(Component):
                 wb_items[mil] = {'fields':milestone_sum_fields}
         data['wb_items'] = wb_items
         data['new_ticket_descriptor'] = self._get_new_ticket_descriptor(
-            IttecoEvnSetup(self.env).scope_element, self.scope_element_weight_field, max_scope_item_weight)
+            IttecoEvnSetup(self.env).scope_element)
 
     
     def _get_milestones_by_level(self, mils_tree, level_name, include_completed = False):
@@ -539,15 +545,6 @@ class DashboardModule(Component):
                         pass
                 break
         return result
-
-    def _add_rendering_properties(self, ticket_type, field_name, max_weight, props):
-        tkt_cfg = self.ticket_type_config
-        if tkt_cfg:
-            props['weight_field_name']=field_name
-            props['max_weight']=max_weight
-            cfg = tkt_cfg.get(ticket_type)
-            if cfg:
-                props.update(cfg)
 
     def _get_stats_config(self):
         all_statuses = set(TicketSystem(self.env).get_all_status())

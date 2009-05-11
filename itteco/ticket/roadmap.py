@@ -4,7 +4,7 @@ from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
 from trac.attachment import AttachmentModule
-from trac.config import ListOption
+from trac.config import ListOption, Option
 from trac.core import implements, Component
 from trac.mimeview import Context
 from trac.resource import Resource
@@ -12,15 +12,16 @@ from trac.ticket import TicketSystem
 from trac.ticket.model import Type
 from trac.ticket.roadmap import MilestoneModule, RoadmapModule, TicketGroupStats, \
     DefaultTicketGroupStatsProvider, apply_ticket_permissions,get_ticket_stats,milestone_stats_data
-from trac.util.datefmt import get_date_format_hint, parse_date, utc
+from trac.util.datefmt import get_date_format_hint, parse_date, utc, format_datetime
 from trac.util.translation import _
 
 from trac.web.api import ITemplateStreamFilter
 from trac.web.chrome import Chrome, add_link, add_stylesheet, add_warning
 
+from itteco.init import IttecoEvnSetup
 from itteco.ticket.model import StructuredMilestone
 from itteco.ticket.utils import get_fields_by_names, get_tickets_for_milestones
-from itteco.init import IttecoEvnSetup
+from itteco.utils import json
 
 def get_tickets_for_structured_milestone(env, db, milestone, field='component', types=None):
     field = ['milestone'] + ( field and (isinstance(field, basestring) and [field,] or field) or [])
@@ -313,6 +314,7 @@ class IttecoMilestoneModule(MilestoneModule):
         return 'itteco_milestone_view.html', data, None
         
 class IttecoRoadmapModule(RoadmapModule):
+    count_burndown_on = Option('itteco-whiteboard-config', 'count_burndown_on', "complexity")
     _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])
     def get_statistics_source(self, active = None):
         stats_source = [{'value' : None, 'label' : 'Number of tickets', 'active': not active},]
@@ -331,9 +333,12 @@ class IttecoRoadmapModule(RoadmapModule):
         db = self.env.get_db_cnx()
         milestones = [m for m in StructuredMilestone.select(self.env, showall, db)
                       if 'MILESTONE_VIEW' in req.perm(m.resource)]
-                      
-        if req.args.get('format') == 'ics':
+        requested_fmt = req.args.get('format')
+        if requested_fmt == 'ics':
             self.render_ics(req, db, milestones)
+            return
+        elif requested_fmt=='json':
+            self._render_started_sprints_stats(req)
             return
         max_level = len(IttecoEvnSetup(self.env).milestone_levels)
         max_level = max_level and max_level-1 or 0;
@@ -399,3 +404,20 @@ class IttecoRoadmapModule(RoadmapModule):
                 next_level_mils.extend(m.kids)
             sub_mils = next_level_mils
         return res
+        
+    def _render_started_sprints_stats(self, req):
+        stats =[]
+        calc_on  = self.count_burndown_on
+        if calc_on=='quantity':
+            cal_on=None
+            
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        cursor.execute("SELECT name, started, due FROM milestone WHERE started>0 AND COALESCE(completed,0)=0")
+        for milestone_name, started, due in cursor:
+            tickets = apply_ticket_permissions(
+                self.env, req, get_tickets_for_structured_milestone(self.env, db, milestone_name, calc_on))
+            stat = SelectionTicketGroupStatsProvider(self.env).get_ticket_group_stats(tickets, calc_on)
+            stats.append({'stats': {'count': stat.count, 'done_count':stat.done_count, 'done_percent':stat.done_percent}, #[ interval for interval in stat.intervals]
+                'milestone': milestone_name, 'started': format_datetime(started), 'due': format_datetime(due)})
+        req.write(json.write(stats))

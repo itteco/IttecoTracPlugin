@@ -112,21 +112,27 @@ getAggregatesValues=function(field_name, scope){
     return {'sum': sum, 'full_stats':stats};
 }
 colorizeWidget=function(widget){
-    var val = parseInt($(".summary .parameter_value[field_name='"+widget.attr('weight_field_name')+"']", widget).text());
-    val = isNaN(val) ? 0 : val;
-    var max_val = parseInt(widget.attr('max_weight'));
-    var min_color = widget.attr('min_color');
-    var max_color = widget.attr('max_color');
-    if(max_val && min_color && max_color){
-        var c = "rgb(";
-        for(var i=0; i<3; i++){
-            if (i!=0) c+=',';
-            var l = parseInt("0x"+min_color.substring(1+i*2,1+(i+1)*2),16);
-            var h = parseInt("0x"+max_color.substring(1+i*2,1+(i+1)*2),16);
-            c+=Math.round(l+(h-l)*(val/max_val));
+    var tkt_type_cfg = ticket_rendering_config[widget.attr('ticket_type')]
+    if(tkt_type_cfg){
+        var val = parseInt($(".summary .parameter_value[field_name='"+tkt_type_cfg['weight_field_name']+"']", widget).text());
+        val = isNaN(val) ? 0 : val;
+        var max_val = parseInt(tkt_type_cfg['max_weight']);
+        var min_color = tkt_type_cfg['min_color'];
+        var max_color = tkt_type_cfg['max_color'];
+        if(max_val && min_color && max_color){
+            var c = "rgb(";
+            for(var i=0; i<3; i++){
+                if (i!=0) c+=',';
+                var l = parseInt("0x"+min_color.substring(1+i*2,1+(i+1)*2),16);
+                var h = parseInt("0x"+max_color.substring(1+i*2,1+(i+1)*2),16);
+                c+=Math.round(l+(h-l)*(val/max_val));
+            }
+            c+=")";
+            widget.css('background-color',c);
         }
-        c+=")";
-        widget.css('background-color',c);
+        var icon = $(".status-icon", widget);
+        icon.css('background-color',tkt_type_cfg['icon_bg_color']||'#0F0');
+        icon.text(tkt_type_cfg['icon_text']);
     }
 }    
 getProgressbarContext=function(widget){
@@ -307,6 +313,7 @@ acceptTicket = function(draggable){
     }
     var source_status = draggable.attr('status');
     var group_name = this.attr('status');
+    if(group_name==draggable.parent().attr('status')) return true;
     if (typeof(groups_config) == 'undefined') return false;
     var group_cfg = groups_config[group_name];
     if (typeof(group_cfg) == 'undefined') return false;
@@ -431,12 +438,16 @@ setupTicketCreation = function(){
     var clonner = template.clone().attr('id','new_ticket-clonner').appendTo($('#hidden_container'));
     $(".summary .parameter:has([field_name='summary'],[field_name='description'], [field_name='type'])", clonner).remove();
     $(".edit .parameter:has([name='field_summary'],[name='field_description'], [name='field_type'])", clonner).remove();
+    var found_milestone;
+    for (mil in window.current_milestone){found_milestone = mil;break;}
+    $("[name='field_milestone']", template).val(found_milestone);
     change_ticket_view(template,'edit');
 
     function showDialog(){
         template.css('display','block').dialog({
-            modal:true, 
-            height: 400,
+            modal:true,
+            height:window.clientHeight*0.9+30,
+            width:400,
             overlay:{'opacity':'0.5', 'background-color':'#CACACA'}, 
             close: function(event, ui){$(this).dialog('destroy');}});    
     }
@@ -454,19 +465,23 @@ setupTicketCreation = function(){
         }
     }
     /*add buttons for ticket creation*/
-    $("<a class='append_button' href='#'>Add Ticket</a>").bind('click', function(){
+    var link =$("<a class='append_button' href='#'>Add Ticket</a>").bind('click', function(){
         var o = $(this);
-        $(':hidden[name="new_story"]', template).val(o.parent().attr('idx'));
+        $(':hidden[name="new_story"]', template).val(o.parents(".group_holder").attr('idx'));
         showDialog();
         return false;
-    }).appendTo($('#whiteboard_table tbody th'));
+    });
+    $($("<li/>").append(link)).appendTo($('#whiteboard_table tbody th .views'));
     /*setup ticket editor*/
     $('.views, .hidden', template).remove();
     $('form', template).attr('onsubmit','').append('<input type="hidden" name="new_story"/>').bind(
         'submit',function(){
             var targetObj= $(':hidden[name="new_story"]', this);
-            var targetVal = $(':hidden[name="new_story"]', this).val();
-            var widget=$('.widget',clonner).clone().appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
+            var targetVal = targetObj.val();
+            var widget=$('.widget',clonner).clone(). 
+                attr('ticket_type',$(':input[name="field_type"]',this).val()). 
+                appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
+            $('[field_name="description"]', widget).text($(':input[name="field_description"]',this).val());
             if(isNaN(parseInt(targetVal))){
                 targetObj.val('');
             }
