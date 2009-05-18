@@ -22,7 +22,7 @@
             "statuses" : ${as_js_dict(config['statuses'])},
             "overall_completion" : ${config['overall_completion'] or 0},
             "label" : "${config['label'] or config['name']}",
-            "css_class" : "${config['css_class']}"},
+            "css_class" : "${config['css_class'] or config['name']}"},
         </py:for>
             "x":1
         };

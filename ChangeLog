@@ -1,4 +1,7 @@
 # Itteco Trac Plugin Changelog #
+IttecoTracPlugin 0.1.12 (May 19, 2009)
+* Add support of modifiable reports
+
 IttecoTracPlugin 0.1.12 (May 11, 2009)
 * Move widgets colorization to client side
 

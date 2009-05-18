@@ -27,6 +27,7 @@ setup(
                                      'itteco.scrum.web_ui = itteco.scrum.web_ui',
                                      'itteco.scrum.burndown = itteco.scrum.burndown',
                                      'itteco.ticket.admin = itteco.ticket.admin',
+                                     'itteco.ticket.report = itteco.ticket.report',
                                      'itteco.ticket.roadmap = itteco.ticket.roadmap',
                                      'itteco.ticket.web_ui = itteco.ticket.web_ui']},
     install_requires=['trac >= 0.11.3','genshi >= 0.5.1'], 
