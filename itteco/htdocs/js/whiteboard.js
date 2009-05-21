@@ -77,11 +77,14 @@ update_cell = function(cell, ignore_id){
         
     $(".whiteboard_table .group"+group_filter).each(function(i){
         calcAggregates(this, $(selector, $(".whiteboard_table .droppable"+group_filter)))});
+
     enableAccordionIfAny(cell);
+    calcPercentage();
 }
 calcAllAggregates=function(){
     $(".group", $(".whiteboard_table")).each(function(i){calcAggregates(this, $(".droppable[status='"+$(this).attr('status')+"']", $(".whiteboard_table")))});
     $(".group_holder .widget").each(function(i){calcAggregates(this, $(this).parents(".group_holder").siblings())});
+    calcPercentage();
 }    
 calcAggregates=function(widget, scope){
     var o = $(widget);
@@ -93,6 +96,25 @@ calcAggregates=function(widget, scope){
         if(o.hasClass('calculated')){obj.text(val.sum)};
     });
     setupProgressbar(widget);
+}
+calcPercentage=function(){
+    var sum = 0;
+    $('.whiteboard_table tbody th .parameter_value[field_name="'+window.progress_field_name+ '"]').each(function(i){
+        sum += parseInt($(this).text(), 10);
+    });
+    $('.whiteboard_table thead th .parameter_value').each(function(i){
+        var o = $(this);
+        var pObj = $('.percentage', o);
+        var percentage  = (100*parseInt(o.text())/sum).toFixed(1);
+        if(percentage>0){
+            if(pObj.length==0){
+                pObj = $('<span class="percentage"/>').appendTo(o);
+            }
+            pObj.text('('+percentage+'%)');
+        }else{
+            pObj.remove();
+        }
+    });
 }
 
 getAggregatesValues=function(field_name, scope){
@@ -245,8 +267,8 @@ defaultPrepare =function(ticket, target) {
         data['tkt_action']=action;
     }
     var parent = ticket.parent();
-    update_cell(parent, idx);
     var copy = ticket.remove().draggable(draggable_options);
+    update_cell(parent, idx);
     target.append(copy);
     return {'ticket': copy, 'data':data};
 }
@@ -285,6 +307,7 @@ defaultPostprocess = function(ticket, data){
                 $(".parameter[status='"+data.status+"']", ticket).removeClass('hidden');
             }
             colorizeWidget(ticket);
+            removeFromAccordion(ticket);
             change_ticket_view(ticket, 'summary');
         }else{
             ticket.remove();
@@ -378,7 +401,7 @@ putIntoAccordion = function(ticket){
 }
 removeFromAccordion = function(ticket){
     $('.drag_handle', ticket).unbind('click');
-    $('.body', t).show();
+    $('.body', ticket).show();
 }
 activateAccordionElement = function(handle){
     var h = $(handle)
@@ -435,13 +458,37 @@ modifyMilestonesTree = function(){
 }
 setupTicketCreation = function(){
     var template = $('#new_ticket_template');
-    var clonner = template.clone().attr('id','new_ticket-clonner').appendTo($('#hidden_container'));
-    $(".summary .parameter:has([field_name='summary'],[field_name='description'], [field_name='type'])", clonner).remove();
-    $(".edit .parameter:has([name='field_summary'],[name='field_description'], [name='field_type'])", clonner).remove();
-    var found_milestone;
-    for (mil in window.current_milestone){found_milestone = mil;break;}
-    $("[name='field_milestone']", template).val(found_milestone);
-    change_ticket_view(template,'edit');
+    function setupTicketPrototype(){
+        var tkt_prototype = template.clone().attr('id','new_ticket_prototype').appendTo($('#hidden_container'));
+        $(".summary .parameter:has([field_name='summary'],[field_name='description'], [field_name='type'])", tkt_prototype).remove();
+        $(".edit .parameter:has([name='field_summary'],[name='field_description'], [name='field_type'])", tkt_prototype).remove();
+    }
+    function setupTicketCreationForm(){
+        var new_tkt_link = $('.title a', template);
+        var href = new_tkt_link.attr('href');
+        new_tkt_link.attr('href', href.substring(0,href.indexOf('/',1))+'/newticket');
+        var found_milestone;
+        for (mil in window.current_milestone){found_milestone = mil;break;}
+        $("[name='field_milestone']", template).val(found_milestone);
+        change_ticket_view(template,'edit');
+        $(':button', template).attr('onclick','').bind('click', function(){$(this).parents('form').triggerHandler('reset');template.dialog('destroy');});
+        $('.views, .hidden', template).remove();
+        $('form', template).attr('onsubmit','').append('<input type="hidden" name="new_story"/>').bind(
+            'submit',function(){
+                var targetObj= $(':hidden[name="new_story"]', this);
+                var targetVal = targetObj.val();
+                var widget=$('#new_ticket_prototype .widget').clone(). 
+                    attr('ticket_type',$(':input[name="field_type"]',this).val()). 
+                    appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
+                $('[field_name="description"]', widget).text($(':input[name="field_description"]',this).val());
+                if(isNaN(parseInt(targetVal))){
+                    targetObj.val('');
+                }
+                widget.addClass('draggable').draggable(draggable_options);
+                save_ticket_changes(widget,$(this).serialize(), postprocessTicketCreation);
+                template.dialog('destroy');
+                return false;});
+    }
 
     function showDialog(){
         template.css('display','block').dialog({
@@ -464,33 +511,21 @@ setupTicketCreation = function(){
             $(':hidden[name="ticket"]', ticket).val(tkt_id);
         }
     }
-    /*add buttons for ticket creation*/
-    var link =$("<a class='append_button' href='#'>Add Ticket</a>").bind('click', function(){
-        var o = $(this);
-        $(':hidden[name="new_story"]', template).val(o.parents(".group_holder").attr('idx'));
-        showDialog();
-        return false;
-    });
-    $($("<li/>").append(link)).appendTo($('#whiteboard_table tbody th .views'));
-    /*setup ticket editor*/
-    $('.views, .hidden', template).remove();
-    $('form', template).attr('onsubmit','').append('<input type="hidden" name="new_story"/>').bind(
-        'submit',function(){
-            var targetObj= $(':hidden[name="new_story"]', this);
-            var targetVal = targetObj.val();
-            var widget=$('.widget',clonner).clone(). 
-                attr('ticket_type',$(':input[name="field_type"]',this).val()). 
-                appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
-            $('[field_name="description"]', widget).text($(':input[name="field_description"]',this).val());
-            if(isNaN(parseInt(targetVal))){
-                targetObj.val('');
-            }
-            widget.addClass('draggable').draggable(draggable_options);
-            save_ticket_changes(widget,$(this).serialize(), postprocessTicketCreation);
-            template.dialog('destroy');
-            return false;});
-        
-    $(':button', template).attr('onclick','').bind('click', function(){$(this).parents('form').triggerHandler('reset');template.dialog('destroy');});    
+
+    function setupButtonsForTicketCreation(){
+        var link =$("<a class='append_button' href='#'>Add Ticket</a>").bind('click', function(){
+            var o = $(this);
+            $(':hidden[name="new_story"]', template).val(o.parents(".group_holder").attr('idx'));
+            showDialog();
+            return false;
+        });
+        $($("<li/>").append(link)).appendTo($('#whiteboard_table tbody th .views'));
+    }
+    if(template.length>0){
+        setupTicketPrototype();
+        setupTicketCreationForm();
+        setupButtonsForTicketCreation();
+    }
 }
 $(document).ready(function(){
     setupAjax();

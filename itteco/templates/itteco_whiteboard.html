@@ -142,9 +142,7 @@
     <p id="wb-status" py:if="progress_field">Progress bars consider <strong>${progress_field.label}</strong> progress.</p>
 
   </div>
-  <div id="dyn_hint"/>
-  <a href="#" onclick="showDialog()">Show dialog</a>
-  
+  <div id="dyn_hint"/> 
   <div id="hidden_container" class="hidden">
     <div id="new_ticket_template" class="hidden" py:if="new_ticket_descriptor">
         <xi:include href="itteco_ticket_widget.html" py:with="obj=new_ticket_descriptor['ticket']; cfg=new_ticket_descriptor"/>  

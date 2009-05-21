@@ -7,6 +7,7 @@ from genshi.filters.transform import Transformer
 
 from trac.core import Component, implements, TracError
 from trac.config import Option, ListOption, ExtensionOption
+from trac.resource import ResourceNotFound
 from trac.ticket.api import TicketSystem
 from trac.ticket.default_workflow import ConfigurableTicketWorkflow
 from trac.ticket.model import Ticket, Resolution, Type, Milestone
@@ -150,7 +151,9 @@ class DashboardModule(Component):
                     if act_id!='_reset':
                         transitions.setdefault(
                             act_info['newstate'], []). \
-                                append({'action': act_info['name'], 'oldstates':act_info['oldstates']}) 
+                                append({'action': act_id, 'oldstates':act_info['oldstates']}) 
+                                
+                self.env.log.debug('transitions="%s"' % transitions)
             def parse_transitions(transitions_string):
                 pass# todo implement parsing
             def get_group_options(group_name, predefined_transitions):
@@ -166,12 +169,14 @@ class DashboardModule(Component):
                         del opts['transitions']
                     for ticket_status in opts['status']:
                         if ticket_status in predefined_transitions:
-                            opts.setdefault('transitions', predefined_transitions[ticket_status])
+                            opts.setdefault('transitions', []).extend(predefined_transitions[ticket_status] or [])
                 return opts
                     
             self._old_groups=groups_config
             self._ticket_groups=[get_group_options(gr_name, transitions) 
                 for gr_name in groups_config.getlist('groups', keep_empty=False)]
+            
+            self.env.log.debug('ticket_groups="%s"' % self._ticket_groups)
         return self._ticket_groups
     
     def _get_ticket_group(self, ticket):
@@ -439,12 +444,14 @@ class DashboardModule(Component):
                 include_kids, show_completed)
         if name=='none':
             return ''
-            
-        mil = StructuredMilestone(self.env, name)
-        names = _flatten_and_get_names(mil, include_kids, show_completed)
-        if not names:
-            names = mil.name
-        return names
+        try:    
+            mil = StructuredMilestone(self.env, name)            
+            names = _flatten_and_get_names(mil, include_kids, show_completed)
+            if not names:
+                names = mil.name
+            return names
+        except ResourceNotFound:
+            return ''
             
     def _perform_action(self, req):
         action = req.args['action']

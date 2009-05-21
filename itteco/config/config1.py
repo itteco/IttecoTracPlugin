@@ -7,7 +7,7 @@ from trac.db_default import schema
 from itteco import __version__
 
 def do_upgrade(env, db, installed_version):
-       
+    env.log.debug("Upgrading from version %s" % installed_version)
     do_initial_setup(env, db, installed_version)
     upgrade_to_0_1_2(env, db, installed_version)
     upgrade_to_0_1_9(env, db, installed_version)
@@ -33,6 +33,7 @@ def do_initial_setup(env, db, installed_version):
     for table in tables:
         for stmt in db_backend.to_sql(table):
             cursor.execute(stmt)
+    env.log.debug("Upgrading: do_initial_setup")
 
 def upgrade_to_0_1_2(env, db, installed_version):
     if installed_version>=[0,1,2]:
@@ -50,12 +51,13 @@ def upgrade_to_0_1_2(env, db, installed_version):
             env.config.save()
         except:        
             pass
-   
+    available_sections = [s for s in env.config.sections()]
     cfg = Configuration(resource_filename(__name__, 'sample.ini'))
     for section in cfg.sections():
-        target_cfg = env.config[section]
-        for option, value in cfg.options(section):
-            target_cfg.set(option, value)
+        if section[:6]!='itteco' or section not in available_sections:
+            target_cfg = env.config[section]
+            for option, value in cfg.options(section):
+                target_cfg.set(option, value)
 
     custom = env.config['ticket-custom']
     if 'business_value' not in custom or custom.get('business_value')!='select':
@@ -67,6 +69,7 @@ def upgrade_to_0_1_2(env, db, installed_version):
         custom.set('complexity.label', 'Complexity')
         custom.set('complexity.options', '|0|1|2|3|5|8|13|21|34|55|89|134')
     env.config.save()
+    env.log.debug("Upgrading: upgrade_to_0_1_2")
     
 def upgrade_to_0_1_9(env, db, installed_version):
     if installed_version>=[0,1,9]:
@@ -91,6 +94,7 @@ def upgrade_to_0_1_9(env, db, installed_version):
         for stmt in db_backend.to_sql(new_mil_table):
             cursor.execute(stmt)
         cursor.execute("INSERT INTO milestone (%s) SELECT %s FROM milestone_old;" % (cols, cols))
+    env.log.debug("Upgrading: upgrade_to_0_1_9")
     
 def upgrade_to_0_1_10(env, db, installed_version):
     if installed_version>=[0,1,10]:
@@ -99,4 +103,5 @@ def upgrade_to_0_1_10(env, db, installed_version):
     groups_config = env.config['itteco-whiteboard-groups']
     groups_config.set('use_workflow_configuration', 'true')
     env.config.save()
+    env.log.debug("Upgrading: upgrade_to_0_1_10")
 

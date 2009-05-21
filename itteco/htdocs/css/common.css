@@ -156,7 +156,12 @@ table.whiteboard_table thead th .parameter_value {
 	display: block;
 	text-align: right;
 }
-
+table.whiteboard_table thead th .percentage {
+	color: #ba0a00;
+	font-size: 0.5em;
+	text-align: right;
+    vertical-align: top;
+}
 
 
 
