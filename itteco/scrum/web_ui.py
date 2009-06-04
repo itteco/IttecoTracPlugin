@@ -398,7 +398,8 @@ class DashboardModule(Component):
             IttecoEvnSetup(self.env).scope_element)
 
     
-    def _get_milestones_by_level(self, mils_tree, level_name, include_completed = False):        mils =[]
+    def _get_milestones_by_level(self, mils_tree, level_name, include_completed = False):
+	mils =[]
         mils_dict={}
         def filter_mils(mil, force_add=False):
             mils_dict[mil.name] = mil
