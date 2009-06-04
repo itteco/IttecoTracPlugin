@@ -1,4 +1,8 @@
 # Itteco Trac Plugin Changelog #
+
+IttecoTracPlugin 0.1.14 (June 4, 2009)
+* Fix milestones json stats for cross domain usage
+
 IttecoTracPlugin 0.1.12 (May 19, 2009)
 * Add support of modifiable reports
 
