@@ -2,7 +2,7 @@ from copy import copy
 from datetime import datetime
 from trac.resource import *
 from trac.ticket.model import Ticket, Milestone
-from trac.util.datefmt import utc, utcmax, to_timestamp
+from trac.util.datefmt import utc, utcmax, to_timestamp, to_datetime
 from trac.util.translation import _
 from trac.util.compat import set, sorted
 from trac.util import embedded_numbers, partition
@@ -101,22 +101,33 @@ class StructuredMilestone(Milestone):
      
     def __init__(self, env, milestone=None, db=None):
         self.parent = self._old_parent = self._level = None
+        self._old_started = self.started = None
         self._kids = []
         self._kids_were_fetched= False
         super(StructuredMilestone, self).__init__(env, milestone, db)
+        self._old_due = self.due
+        self._old_completed = self.completed
+        self._old_description = self.description
+
+    is_started = property(fget=lambda self: self.started is not None)
+    level = property(fget = lambda self: self._get_level(), fset = lambda self, val: self._set_level(val))
+    can_be_closed = property(lambda self: self._can_be_closed())
+    kids = property (lambda self: self._get_kids(), lambda self, val: self._set_kids(val))
 
     def _fetch(self, name, db=None):
         if not db:
             db = self.env.get_db_cnx()
-        self._fetch_parent(name, db)
+        self._fetch_struct_fields(name, db)
         super(StructuredMilestone, self)._fetch(name, db)
 
-    def _fetch_parent(self, name, db):
+    def _fetch_struct_fields(self, name, db):
         cursor = db.cursor()
-        cursor.execute("SELECT ms.parent "
-                       "FROM milestone m, milestone_struct ms WHERE m.name=ms.name AND m.name=%s", (name,))
+        cursor.execute("SELECT m.started, ms.parent "
+                       "FROM milestone m LEFT OUTER JOIN milestone_struct ms ON m.name=ms.name WHERE m.name=%s", (name,))
         row = cursor.fetchone()
-        self._old_parent = self.parent= row and row[0] or None
+        if row:
+            self._old_started = self.started = row[0] and to_datetime(int(row[0])) or None
+            self._old_parent = self.parent= row[1] or None
         
     def _get_kids(self):
         if not self._kids and not self._kids_were_fetched:
@@ -134,11 +145,8 @@ class StructuredMilestone(Milestone):
 
     def _from_database_row(self, row):
         self._old_parent = self.parent = row[-1]
-        super(StructuredMilestone, self)._from_database(row[0:-1])
-
-    level = property(fget = lambda self: self._get_level(), fset = lambda self, val: self._set_level(val))
-    can_be_closed = property(lambda self: self._can_be_closed())
-    kids = property (lambda self: self._get_kids(), lambda self, val: self._set_kids(val))
+        self._old_started = self.started = row[-2] and to_datetime(int(row[-2])) or None
+        super(StructuredMilestone, self)._from_database(row[0:-2])
     
     def _can_be_closed(self):
         if self.kids:
@@ -181,6 +189,11 @@ class StructuredMilestone(Milestone):
         super(StructuredMilestone, self).delete(retarget_to, author, db)
         if handle_commit:
             db.commit()
+            
+        listeners = IttecoEvnSetup(self.env).change_listeners
+        for listener in listeners:
+            listener.milestone_deleted(self)
+
 
     def insert(self, db=None):
         assert self.name, 'Cannot create milestone with no name'
@@ -195,8 +208,14 @@ class StructuredMilestone(Milestone):
             cursor.execute("INSERT INTO milestone_struct (name,parent) VALUES (%s,%s)", (self.name, self.parent))
         if handle_commit:
             db.commit()
+            
+        listeners = IttecoEvnSetup(self.env).change_listeners
+        for listener in listeners:
+            listener.milestone_created(self)
+
 
     def update(self, db=None):
+        self.env.log.debug("Updating '%s' milestone" %self)
         assert self.name, 'Cannot update milestone with no name'
         handle_commit = False
         if not db:
@@ -204,7 +223,16 @@ class StructuredMilestone(Milestone):
             handle_commit = True
             
         _old_name = self._old_name
+        
+        old_values = {}
+        for attr_name in ['completed', 'due', 'name', 'parent', 'started']:
+            old_val= getattr(self, '_old_'+attr_name, None)
+            old_values[attr_name]=old_val
         super(StructuredMilestone, self).update(db)
+        if(self._old_started !=self.started):
+            cursor = db.cursor()
+            cursor.execute("UPDATE milestone SET started=%s WHERE name=%s", (to_timestamp(self.started), self.name))
+            
         if self.name!=_old_name:
             cursor = db.cursor()
             cursor.execute("UPDATE milestone_struct SET name=%s WHERE name=%s", (self.name, _old_name))
@@ -221,12 +249,21 @@ class StructuredMilestone(Milestone):
 
         if handle_commit:
             db.commit()
+            
+        for attr_name in ['name', 'parent', 'completed','due', 'started']:
+            new_val= getattr(self, attr_name, None)
+            if attr_name in old_values and new_val == old_values[attr_name]:
+                del old_values[attr_name]
+                
+        listeners = IttecoEvnSetup(self.env).change_listeners
+        for listener in listeners:
+            listener.milestone_changed(self, old_values)
     
     @staticmethod
     def select(env, include_completed=True, db=None):
         if not db:
             db = env.get_db_cnx()
-        sql = "SELECT m.name,due,completed,description, ms.parent \
+        sql = "SELECT m.name,due,completed,description, started, ms.parent \
                    FROM milestone m LEFT OUTER JOIN milestone_struct ms ON m.name=ms.name "
         if not include_completed:
             sql += "WHERE COALESCE(completed,0)=0 "

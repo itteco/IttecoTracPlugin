@@ -1,11 +1,12 @@
 from datetime import datetime
 from trac.core import TracError
 from trac.config import ListOption
-from trac.ticket.admin import MilestoneAdminPanel
 from trac.resource import ResourceNotFound
-
+from trac.ticket.admin import MilestoneAdminPanel
 from trac.util.datefmt import utc, parse_date, get_date_format_hint, \
                               get_datetime_format_hint
+from trac.util.translation import _
+
 from itteco.ticket.model import StructuredMilestone
 from trac.web.chrome import add_link, add_script,add_stylesheet
 
@@ -15,6 +16,8 @@ class IttecoMilestoneAdminPanel(MilestoneAdminPanel):
     def _render_admin_panel(self, req, cat, page, milestone):
         req.perm.require('TICKET_ADMIN')
         add_stylesheet(req, 'itteco/css/common.css')
+        add_script(req, 'itteco/js/jquery.ui/ui.core.js')
+        add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
         add_script(req, 'itteco/js/custom_select.js')
         # Detail view?
         if milestone:

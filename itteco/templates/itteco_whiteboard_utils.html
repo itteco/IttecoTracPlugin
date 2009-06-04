@@ -9,9 +9,8 @@
         window.groups_config = {
         <py:for each="group in groups">
             "${group['name']}" : {
-            "src_statuses" : ${as_js_dict(group['source_status'])},
-            "statuses" : ${as_js_dict(group['status'])},
-            "action" : "${group['action']}"
+            "transitions" : { ${','.join('"%s":"%s"' % (old_state, trans['action']) for trans in group['transitions'] for old_state in trans['oldstates'])}},
+            "statuses" : ${as_js_dict(group['status'])}
             },
         </py:for>
             "x":1
@@ -23,30 +22,39 @@
             "statuses" : ${as_js_dict(config['statuses'])},
             "overall_completion" : ${config['overall_completion'] or 0},
             "label" : "${config['label'] or config['name']}",
-            "css_class" : "${config['css_class']}"},
+            "css_class" : "${config['css_class'] or config['name']}"},
         </py:for>
             "x":1
-        }; 
+        };
+        window.ticket_rendering_config = {
+        <py:for each="tkt_type in ticket_type_rendering_config">
+            "$tkt_type" : {${",".join(['"%s":"%s"' % (key, ticket_type_rendering_config[tkt_type][key]) for key in ticket_type_rendering_config[tkt_type]])}},
+        </py:for>
+            "x":1
+        };
+
         window.stats_status_to_group = {${','.join(["'%s':'%s'" % (s, cfg['name']) for cfg in stats_config for s in cfg['statuses']])}};
         window.actionUrl = "${href.whiteboard('modify')+'?action=change_task'}";        
      </div>
-     <div py:def="render_milestones(items, level, maxlevel=-1)" py:strip="">
+     <div py:def="render_milestones(items, level, maxlevel=-1, show_extras=True)" py:strip="">
         <py:if test="items and (maxlevel==-1 or (maxlevel-level)!=0)">
             <br/>
             <ul>
-                <li py:if="level==0"><a href="${href.whiteboard(board_type, 'none')}" class="item-droppable milestone">Backlog (no milestone)</a></li>
+                <li py:if="level==0 and show_extras"><a href="${href.whiteboard(board_type, 'none')}" class="item-droppable milestone">Backlog (no milestone)</a></li>
                 <py:for each="item in items">
                 <li><a href="${href.whiteboard(board_type, item.name)}" class="item-droppable milestone"><span>${item.name}</span><span class="milestone-type">[${item.level['label']}]</span></a>
-                ${render_milestones(item.kids, level +1, maxlevel)}
+                ${render_milestones(item.kids, level +1, maxlevel, show_extras)}
                 </li>
                 </py:for>
-                <li py:if="level==0"><a href="${href.whiteboard(board_type, 'not_completed_milestones')}">All active milestones</a></li>
+                <li py:if="level==0 and show_extras"><a href="${href.whiteboard(board_type, 'not_completed_milestones')}">All active milestones</a></li>
                 <form id="mils_options"  py:if="level==0">
-                <div class="milestones-options">
-                    <input id="sub_mils_switch" type="checkbox" name="include_sub_mils" checked="${include_sub_mils and 'checked' or None}" onchange="$('#mils_options').submit();"/><label for="sub_mils_switch">Include tickets from sub-milestones</label>
+                <div class="milestones-options" py:if="show_extras">
+                    <input type="hidden" name="include_sub_mils" value="off"/>
+                    <input id="sub_mils_switch" type="checkbox" name="include_sub_mils" checked="${include_sub_mils and 'checked' or None}" /><label for="sub_mils_switch">Include tickets from sub-milestones</label>
                 </div>
                 <div class="milestones-options">
-                    <input id="complete_mils_switch" type="checkbox" name="show_closed_milestones" checked="${show_closed_milestones and 'checked' or None}" onchange="$('#mils_options').submit();"/><label for="complete_mils_switch">Show already completed milestones</label>
+                    <input type="hidden" name="show_closed_milestones" value="off"/>
+                    <input id="complete_mils_switch" type="checkbox" name="show_closed_milestones" checked="${show_closed_milestones and 'checked' or None}"/><label for="complete_mils_switch">Show already completed milestones</label>
                 </div>
                 </form>
 
@@ -75,6 +83,10 @@
                     py:content="option"></option>
           </optgroup>
         </select>
+        <textarea py:when="'textarea'" id="field-${field.name}" name="field_${field.name}"
+                  cols="${field.width or 40}" rows="${field.height or 4}"
+                  class="${field.format == 'wiki' and 'wikitext' or None}"
+                  py:content="value"></textarea>
         <span py:when="'checkbox'">
           <input type="checkbox" id="field-${field.name}" name="field_${field.name}"
                  checked="${ticket[field.name] == '1' and 'checked' or None}" value="1" />

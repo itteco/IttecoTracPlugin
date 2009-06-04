@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns:py="http://genshi.edgewall.org/">
+  <font>Verdana</font>
+  <font-size>10</font-size>
+  <margins>0</margins>  
+  <equal_spacing>false</equal_spacing>
+
+  <number_format>  
+    <letters>
+       <letter number="1000">K</letter>
+       <letter number="1000000">M</letter>
+       <letter number="1000000000">B</letter>
+    </letters>      
+  </number_format>
+  
+  <data_sets> 
+    <data_set did="0">
+       <csv>
+         <separator>,</separator>
+         <date_format>YYYY-MM-DDThh:mm:ss</date_format>
+         <columns>
+           <column>date</column>
+           <column>burndown</column>
+           <column>approximation</column>
+           <column>ideal</column>
+           <column py:for="i in xrange(0, graphs and len(graphs) or 0)" >c$i</column>
+           <column>burnup</column>
+         </columns>
+         <data>
+            ${Markup(data)}
+         </data>
+       </csv>
+       <events py:if="events">
+        <event id="event_$idx" py:for="idx, event in enumerate(events)">
+            <chart_id py:if="event.extended">0</chart_id>
+            <graph_id py:if="event.extended">burndown</graph_id>
+            <date>${event.datetime}</date>
+            <description>${event.text}</description>
+            <use_hand_cursor>true</use_hand_cursor>
+            <url py:if="event.url">${event.url}</url>
+            <axis py:if="not event.extended">true</axis>
+            <bullet py:if="not event.extended">flag</bullet>
+        </event>
+       </events>
+    </data_set>
+  </data_sets>
+
+  <charts>
+  	<chart cid="0">
+        <border_color>#D7D7D7</border_color>
+        <border_alpha>100</border_alpha>
+
+        <grid>
+            <x>
+              <color>#D7D7D7</color>
+              <alpha>70</alpha>
+            </x>
+            <y_left>
+              <color>#D7D7D7</color>
+              <alpha>70</alpha>
+            </y_left>
+        </grid>
+
+        <values>
+            <x>
+              <enabled>true</enabled>
+            </x>
+        </values>
+
+        <legend>
+            <show_date>true</show_date>
+            <negative_color>#BA0A00</negative_color>
+        </legend>
+      
+        <column_width>70</column_width>
+      <events>
+        <bullet>round_outline</bullet>
+        <bullet_size>7</bullet_size>
+        <use_hand_cursor>true</use_hand_cursor>
+        <url_target>_blank</url_target>
+        <border_alpha></border_alpha>
+        <size>8</size>
+      </events>
+        <graphs py:with="colors=['#ff3300','#3366cc','#00cc33','#ffcc00','#ff0099','#003366','#669933','#cc99cc','#333333','#99ff00']">
+            <graph gid="burndown">
+                <type>line</type>
+                <title>Remaining Scope</title>
+                <color>#BA0A00</color>
+                <bullet>round_outline</bullet>
+                <bullet_size>7</bullet_size>
+                <fill_alpha>60</fill_alpha>
+                <data_sources>
+                  <close>burndown</close>
+                </data_sources>
+                <legend>
+                    <date key="true" title="true">{close} ({close.change})</date>
+                    <period key="true" title="true">&nbsp;</period>
+                </legend>
+                <hidden>false</hidden>         
+                <width>2</width>
+            </graph>
+            <graph gid="approximation">
+                <type>line</type>
+                <title>Forecast</title>
+                <color>#3366cc</color>
+                <bullet>round_outline</bullet>
+                <bullet_size>7</bullet_size>
+                <fill_alpha>60</fill_alpha>
+                <data_sources>
+                  <close>approximation</close>
+                </data_sources>
+                <legend>
+                    <date key="true" title="true">{close}</date>
+                    <period key="true" title="true">&nbsp;</period>
+                </legend>
+                <hidden>false</hidden>         
+                <width>2</width>
+            </graph>
+            <graph gid="ideal">
+                <type>line</type>
+                <title>Ideal</title>
+                <color>#00cc33</color>
+                <data_sources>
+                  <close>ideal</close>
+                </data_sources>
+                <legend>
+                    <date key="true" title="true">{close}</date>
+                    <period key="true" title="true">&nbsp;</period>
+                </legend>
+                <hidden>true</hidden>         
+                <width>2</width>
+            </graph>
+  			<graph gid="burnup">
+  				<type>line</type>
+  				<title>Total Extra</title>
+                <color>#BA0A00</color>
+  				<data_sources>
+  				  <close>burnup</close>
+                </data_sources>
+      		    <legend>
+                    <date key="true" title="true">{close} ({close.change})</date>
+                    <period key="true" title="true">&nbsp;</period>
+                </legend>
+                <hidden>false</hidden>
+                <width>2</width>
+  			</graph>  
+
+  			<graph gid="col_$idx" py:for="idx, graph in enumerate(graphs or [])">
+  				<type>line</type>
+  				<title>${graph.name}</title>
+                <bullet>round_outline</bullet>
+                <bullet_size>7</bullet_size>
+                <color>${graph.color or colors[idx % len(colors)]}</color>
+  				<data_sources>
+  				  <close>c$idx</close>
+                </data_sources>
+                <fill_alpha>70</fill_alpha>
+      		    <legend>
+                    <date key="true" title="true">{close}</date>
+                    <period key="true" title="true">{close}</period>
+                </legend>
+                <hidden>false</hidden>
+                <stack_to py:if="idx">col_${idx-1}</stack_to>
+  			</graph>
+
+        </graphs>
+  	</chart>
+  </charts>
+
+  <data_set_selector>
+    <enabled>false</enabled>
+  </data_set_selector>
+  
+  <period_selector>
+    <custom_period_enabled>false</custom_period_enabled>
+  </period_selector>
+
+  <header>
+    <enabled>false</enabled>
+  </header>
+
+  <background>    
+    <color>ffffff</color>
+    <alpha>100</alpha>      
+  </background>    
+
+  <plot_area>
+    <margins>10</margins>
+    <bg_color>ffffff</bg_color>
+    <bg_alpha>100</bg_alpha>
+    <border_alpha>70</border_alpha>
+    <border_color>ffffff</border_color>
+    <border_width></border_width>
+    <corner_radius>8</corner_radius>
+  </plot_area>
+
+  <scroller>
+    <enabled>true</enabled>
+    <height>40</height>    
+    <graph_data_source>c0</graph_data_source>
+    <bg_color>f5f5f5</bg_color>
+    <selected_color>daf0fd</selected_color>
+    <resize_button_color>317dc9</resize_button_color>
+    <resize_button_style>dragger</resize_button_style>
+  </scroller>
+  
+  <date_formats>
+     <legend>
+        <days><![CDATA[<b>month DD, YYYY</b>]]></days>
+       <weeks><![CDATA[<b>month DD, YYYY</b>]]></weeks>
+       <months><![CDATA[<b>month YYYY</b>]]></months>
+       <years><![CDATA[<b>YYYY</b>]]></years>
+     </legend>
+  </date_formats>    
+
+</settings>

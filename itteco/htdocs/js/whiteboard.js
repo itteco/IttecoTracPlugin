@@ -1,5 +1,69 @@
 var draggable_options ={helper: 'clone', handle: '.drag_handle', opacity: 0.8, 'start' : function(e, ui){ui.helper.css('width',this.offsetWidth+'px');}};
-var wbContext = {filter: {field: new Object(), attr: new Object()}};
+function WBContext(){
+    this.filter = {field: new Object(), attr: new Object()};
+    this.cpVisible = false;
+    this._save = function(){
+        var strVal = "";
+        var attrs = wbContext.filter.attr;
+        for (var a in attrs){
+          if (attrs[a]) strVal +='&filter$attr$'+a+'='+attrs[a];
+        }	
+        var fields = wbContext.filter.field;
+        for (var f in fields){
+          if (fields[f]) strVal +='&filter$field$'+f+'='+fields[f];
+        }
+        strVal+='&cpVisible='+this.cpVisible;
+        if(strVal.length>0){
+            strVal = strVal.substring(1,strVal.length);            
+        }
+
+        $.cookies.set('whiteboardDatabag', strVal);
+    }
+    this.load = function(){
+        var strVal = $.cookies.get('whiteboardDatabag');
+        if(strVal){
+            var pointer = this;
+            $.each(strVal.split('&'), function(){
+                var kw = this.split('=');
+                var path = kw[0].split('$');
+                if(kw.length>1){
+                    var len = path.length-1;
+                    var obj = pointer;
+                    var i =0;
+                    while(i<len && obj){
+                        if(!obj[path[i]]){
+                            obj[path[i]]={};
+                        }
+                        obj = obj[path[i]];
+                        i++;
+                    }
+                    if(obj){
+                        obj[path[len]] = kw[1];
+                    }
+                }
+            })
+        }
+    }
+    this.setFilter = function(type, name, value){
+        if (type=='field'){
+            this.filter.field[name]=value;
+        }else{
+            this.filter.attr[name]=value;
+        }
+        this._save();
+    }
+    this.toggleControlPanel = function(){
+        if(this.cpVisible==true || this.cpVisible=='true'){
+            this.cpVisible = false;
+        }else{
+            this.cpVisible = true;
+        }
+        this._save();
+        return false;
+    }
+}
+var wbContext = new WBContext();
+
 update_cell = function(cell, ignore_id){
     var row_stat = cell.siblings('.group_holder');
     var group_filter ="[status='"+ cell.attr('status')+"']";
@@ -13,11 +77,14 @@ update_cell = function(cell, ignore_id){
         
     $(".whiteboard_table .group"+group_filter).each(function(i){
         calcAggregates(this, $(selector, $(".whiteboard_table .droppable"+group_filter)))});
+
     enableAccordionIfAny(cell);
+    calcPercentage();
 }
 calcAllAggregates=function(){
     $(".group", $(".whiteboard_table")).each(function(i){calcAggregates(this, $(".droppable[status='"+$(this).attr('status')+"']", $(".whiteboard_table")))});
     $(".group_holder .widget").each(function(i){calcAggregates(this, $(this).parents(".group_holder").siblings())});
+    calcPercentage();
 }    
 calcAggregates=function(widget, scope){
     var o = $(widget);
@@ -29,6 +96,25 @@ calcAggregates=function(widget, scope){
         if(o.hasClass('calculated')){obj.text(val.sum)};
     });
     setupProgressbar(widget);
+}
+calcPercentage=function(){
+    var sum = 0;
+    $('.whiteboard_table tbody th .parameter_value[field_name="'+window.progress_field_name+ '"]').each(function(i){
+        sum += parseInt($(this).text(), 10);
+    });
+    $('.whiteboard_table thead th .parameter_value').each(function(i){
+        var o = $(this);
+        var pObj = $('.percentage', o);
+        var percentage  = (100*parseInt(o.text())/sum).toFixed(1);
+        if(percentage>0){
+            if(pObj.length==0){
+                pObj = $('<span class="percentage"/>').appendTo(o);
+            }
+            pObj.text('('+percentage+'%)');
+        }else{
+            pObj.remove();
+        }
+    });
 }
 
 getAggregatesValues=function(field_name, scope){
@@ -48,21 +134,27 @@ getAggregatesValues=function(field_name, scope){
     return {'sum': sum, 'full_stats':stats};
 }
 colorizeWidget=function(widget){
-    var val = parseInt($(".summary .parameter_value[field_name='"+widget.attr('weight_field_name')+"']", widget).text());
-    val = isNaN(val) ? 0 : val;
-    var max_val = parseInt(widget.attr('max_weight'));
-    var min_color = widget.attr('min_color');
-    var max_color = widget.attr('max_color');
-    if(max_val && min_color && max_color){
-        var c = "rgb(";
-        for(var i=0; i<3; i++){
-            if (i!=0) c+=',';
-            var l = parseInt("0x"+min_color.substring(1+i*2,1+(i+1)*2),16);
-            var h = parseInt("0x"+max_color.substring(1+i*2,1+(i+1)*2),16);
-            c+=Math.round(l+(h-l)*(val/max_val));
+    var tkt_type_cfg = ticket_rendering_config[widget.attr('ticket_type')]
+    if(tkt_type_cfg){
+        var val = parseInt($(".summary .parameter_value[field_name='"+tkt_type_cfg['weight_field_name']+"']", widget).text());
+        val = isNaN(val) ? 0 : val;
+        var max_val = parseInt(tkt_type_cfg['max_weight']);
+        var min_color = tkt_type_cfg['min_color'];
+        var max_color = tkt_type_cfg['max_color'];
+        if(max_val && min_color && max_color){
+            var c = "rgb(";
+            for(var i=0; i<3; i++){
+                if (i!=0) c+=',';
+                var l = parseInt("0x"+min_color.substring(1+i*2,1+(i+1)*2),16);
+                var h = parseInt("0x"+max_color.substring(1+i*2,1+(i+1)*2),16);
+                c+=Math.round(l+(h-l)*(val/max_val));
+            }
+            c+=")";
+            widget.css('background-color',c);
         }
-        c+=")";
-        widget.css('background-color',c);
+        var icon = $(".status-icon", widget);
+        icon.css('background-color',tkt_type_cfg['icon_bg_color']||'#0F0');
+        icon.text(tkt_type_cfg['icon_text']);
     }
 }    
 getProgressbarContext=function(widget){
@@ -151,6 +243,10 @@ toggleRowCollapse=function(head_widget){
         expandRow(head_widget);
     }
 }
+toggleControlPanel=function(){
+    $('#wb-sections, #wb-section-info').add($("#wb-panel-button").children()).toggle();
+    return wbContext.toggleControlPanel();;
+}
 change_ticket_view=function(ticket, view){
     $("div.block", ticket).addClass('hidden');
     $('div.'+view, ticket).removeClass('hidden');
@@ -171,8 +267,8 @@ defaultPrepare =function(ticket, target) {
         data['tkt_action']=action;
     }
     var parent = ticket.parent();
-    update_cell(parent, idx);
     var copy = ticket.remove().draggable(draggable_options);
+    update_cell(parent, idx);
     target.append(copy);
     return {'ticket': copy, 'data':data};
 }
@@ -182,7 +278,14 @@ teamMemberPrepare=function(ticket, member) {
     var data = {'ticket':idx, 'tkt_action':'reassign',
          'owner': member.attr('owner'),
          'action_reassign_reassign_owner':member.attr('owner')};
-    var newTarget = ticket.parent().siblings('td[action]').andSelf().filter('[action="reassign"]')
+    var group;
+    for (var gCfg in window.groups_config){
+        if(window.groups_config[gCfg]['statuses']['assigned']){
+            group =gCfg;
+            break;
+        }
+    }
+    var newTarget = ticket.parent().siblings('td').add(ticket.parent()).filter('[status="'+group+'"]')
     update_cell(ticket.parent(), idx);
     var copy = ticket.remove().draggable(draggable_options);
     newTarget.append(copy);
@@ -204,6 +307,7 @@ defaultPostprocess = function(ticket, data){
                 $(".parameter[status='"+data.status+"']", ticket).removeClass('hidden');
             }
             colorizeWidget(ticket);
+            removeFromAccordion(ticket);
             change_ticket_view(ticket, 'summary');
         }else{
             ticket.remove();
@@ -219,7 +323,10 @@ getActionToPerform = function(group_name, ticket_status){
     if (typeof(groups_config) == 'undefined') return;
     var group_cfg = groups_config[group_name];
     if (group_cfg && !group_cfg['statuses'][ticket_status]){
-        return group_cfg['action'];
+        var trans = group_cfg['transitions'];
+        if(trans){
+            return trans[ticket_status];
+        }        
     }
 }    
 
@@ -229,10 +336,11 @@ acceptTicket = function(draggable){
     }
     var source_status = draggable.attr('status');
     var group_name = this.attr('status');
+    if(group_name==draggable.parent().attr('status')) return true;
     if (typeof(groups_config) == 'undefined') return false;
     var group_cfg = groups_config[group_name];
     if (typeof(group_cfg) == 'undefined') return false;
-    return  group_cfg['src_statuses'][source_status];
+    return  group_cfg['transitions'][source_status];
 }
 
 acceptByTeamMember = function(draggable){
@@ -243,32 +351,32 @@ acceptByTeamMember = function(draggable){
     var status= draggable.attr('status');
     var group_cfg = cfg[dest_group_name];
     if (typeof(group_cfg) == 'undefined') return false;
-    return  group_cfg['src_statuses'][status];
+    return  group_cfg['transitions'][status];
 }
-filterTicketsByField = function(e){
+    
+toggleTicketsFilter = function(e){
     var o = $(this);
-    var field = o.parent().parent().attr('filter_field');
-    wbContext.filter.field[field]=o.parent().attr(field);
-    $(".active_filter", o.parents(".wb-panel-section").add(e.data.selector)).text(o.text());
+    var by = e.data.filterBy;
+    var field = o.parent().parent().attr('filter');
+    wbContext.setFilter(by, field, o.parent().attr(field));
     filterTickets();
 }
 
-filterTicketsByAttr = function(){
-    var o = $(this);
-    var attr_name = o.parent().parent().attr('filter_attr');
-    wbContext.filter.attr[attr_name]=o.parent().attr(attr_name);
-    $(".active_filter", o.parents(".wb-panel-section")).text(o.text());
-    filterTickets();
-}
 filterTickets = function(){
-    var sel ="";
+    var sel ="";    
     var attrs = wbContext.filter['attr'];
     for (var a in attrs){
-      if (attrs[a]) sel +='['+a+'="'+attrs[a]+'"]';
+      if (attrs[a]) {
+        sel +='['+a+'="'+attrs[a]+'"]';
+      }
+      $('.active_filter[filter="'+a+'"]').text($('ul[filter="'+a+'"] > li['+a+'="'+attrs[a]+'"]').eq(0).text());
     }	
     var fields = wbContext.filter['field'];
     for (var f in fields){
-      if (fields[f]) sel +=':has([field_name="'+f+'"]:contains("'+fields[f]+'"))';       
+      if (fields[f]){
+        sel +=':has([field_name="'+f+'"]:contains("'+fields[f]+'"))';
+      }
+      $('.active_filter[filter="'+f+'"]').text($('ul[filter="'+f+'"] > li['+f+'="'+fields[f]+'"]').eq(0).text());
     }
     if(sel!=""){
       $(".draggable").filter(sel).show();
@@ -292,14 +400,14 @@ putIntoAccordion = function(ticket){
     $(".drag_handle", ticket).bind('click', function(e){activateAccordionElement(e.target)});
 }
 removeFromAccordion = function(ticket){
-    $(".drag_handle", ticket).unbind('click');
-    $('.body', t).show();
+    $('.drag_handle', ticket).unbind('click');
+    $('.body', ticket).show();
 }
 activateAccordionElement = function(handle){
     var h = $(handle)
     var t = h.hasClass('widget') ? h : h.parent();
     $('.body', t.siblings()).hide();
-    t.removeClass("tiny_widget");
+    t.removeClass('tiny_widget');
     $('.body', t).show();
     change_ticket_view(t,'summary');
 }
@@ -315,20 +423,117 @@ make_droppable = function(obj, acceptCheck, prepare, postprocess){
     obj.droppable({ accept: acceptCheck, activeClass: 'droppable-active', hoverClass: 'droppable-hover', drop: createDropFunction(prepare, postprocess)});
 }
 
-$(document).ready(function(){
-    enableAllAccordions();
-    $('a',$('#wb-section2')).bind('click', {selector:'#wb-section-info-members'}, filterTicketsByField);
-    $('a',$('#wb-section4')).bind('click', filterTicketsByAttr);
+bindEventHandlers = function (){
+    $('a',$('#wb-section2')).bind('click', {filterBy:'field', selector:'#wb-section-info-members'}, toggleTicketsFilter);
+    $('a',$('#wb-section4')).bind('click', {filterBy:'attr'}, toggleTicketsFilter);    
     //expand collapse rows
-    $("th .widget .title",$('#whiteboard_table')).bind('click', function(){toggleRowCollapse($(this).parent())});
-    $("th.first-item",$('#whiteboard_table')).bind('click', function(){var o=$(this);o.toggleClass('active');if(o.hasClass('active')){expandAllRows()}else{collapseAllRows()};});    
-    //fix navigation
-    $("a", $("#wb-section3")).attr("href", function(i){return $(this).attr("href")+document.location.search;});
-    calcAllAggregates();
-    $(".item-droppable", $("#wb-section2")).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});
-    $(".draggable").draggable(draggable_options);
-    $(".widget").each(function(i){colorizeWidget($(this))});
+    $('th .widget .title',$('#whiteboard_table')).bind('click', function(){toggleRowCollapse($(this).parent())});
+    $('th.first-item',$('#whiteboard_table')).bind('click', function(){var o=$(this);o.toggleClass('active');if(o.hasClass('active')){expandAllRows()}else{collapseAllRows()};});
+    $('#wb-panel-button').bind('click', toggleControlPanel);
+}
+enableDragAndDrop = function(){
+    $('.item-droppable', $('#wb-section2')).droppable({ accept: acceptByTeamMember, hoverClass: 'item-droppable-active', drop: createDropFunction(teamMemberPrepare)});
+    $('.draggable').draggable(draggable_options);
+}
+colorizeWidgets = function(){
+    $('.widget').each(function(i){colorizeWidget($(this))});
+}
+setupAjax = function(){
     $('#wb-error-panel').ajaxError(function(event, request, settings){
         $(this).append("<li>Error performing action: " + settings.url + "</li>");
     });
+}
+loadContext = function(){
+    wbContext.load();
+    filterTickets();
+    if(wbContext.cpVisible=='true'){
+        wbContext.cpVisible =false;
+        toggleControlPanel();
+    }
+}
+modifyMilestonesTree = function(){
+    var form = $('#mils_options');
+    form.bind('submit', function(){$(':checkbox:checked', form).prev().remove();});
+    $(':checkbox', form).bind('change', function(){form.trigger('submit');});
+}
+setupTicketCreation = function(){
+    var template = $('#new_ticket_template');
+    function setupTicketPrototype(){
+        var tkt_prototype = template.clone().attr('id','new_ticket_prototype').appendTo($('#hidden_container'));
+        $(".summary .parameter:has([field_name='summary'],[field_name='description'], [field_name='type'])", tkt_prototype).remove();
+        $(".edit .parameter:has([name='field_summary'],[name='field_description'], [name='field_type'])", tkt_prototype).remove();
+    }
+    function setupTicketCreationForm(){
+        var new_tkt_link = $('.title a', template);
+        var href = new_tkt_link.attr('href');
+        new_tkt_link.attr('href', href.substring(0,href.indexOf('/',1))+'/newticket');
+        var found_milestone;
+        for (mil in window.current_milestone){found_milestone = mil;break;}
+        $("[name='field_milestone']", template).val(found_milestone);
+        change_ticket_view(template,'edit');
+        $(':button', template).attr('onclick','').bind('click', function(){$(this).parents('form').triggerHandler('reset');template.dialog('destroy');});
+        $('.views, .hidden', template).remove();
+        $('form', template).attr('onsubmit','').append('<input type="hidden" name="new_story"/>').bind(
+            'submit',function(){
+                var targetObj= $(':hidden[name="new_story"]', this);
+                var targetVal = targetObj.val();
+                var widget=$('#new_ticket_prototype .widget').clone(). 
+                    attr('ticket_type',$(':input[name="field_type"]',this).val()). 
+                    appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
+                $('[field_name="description"]', widget).text($(':input[name="field_description"]',this).val());
+                if(isNaN(parseInt(targetVal))){
+                    targetObj.val('');
+                }
+                widget.addClass('draggable').draggable(draggable_options);
+                save_ticket_changes(widget,$(this).serialize(), postprocessTicketCreation);
+                template.dialog('destroy');
+                return false;});
+    }
+
+    function showDialog(){
+        template.css('display','block').dialog({
+            modal:true,
+            height:window.clientHeight*0.9+30,
+            width:400,
+            overlay:{'opacity':'0.5', 'background-color':'#CACACA'}, 
+            close: function(event, ui){$(this).dialog('destroy');}});    
+    }
+    function postprocessTicketCreation(ticket, data){
+        defaultPostprocess(ticket, data);
+        if(data.result=='done'){
+            var head = $('.title a', ticket);
+            var href = head.attr('href');
+            var tkt_id =data['ticket'];
+            ticket.attr('idx', tkt_id).attr('id', 'ticket_'+tkt_id);
+            href = href.substring(0,href.length-3)+tkt_id;
+            head.attr('href',href).text('#'+tkt_id);
+            head.next().text(data['summary']);
+            $(':hidden[name="ticket"]', ticket).val(tkt_id);
+        }
+    }
+
+    function setupButtonsForTicketCreation(){
+        var link =$("<a class='append_button' href='#'>Add Ticket</a>").bind('click', function(){
+            var o = $(this);
+            $(':hidden[name="new_story"]', template).val(o.parents(".group_holder").attr('idx'));
+            showDialog();
+            return false;
+        });
+        $($("<li/>").append(link)).appendTo($('#whiteboard_table tbody th .views'));
+    }
+    if(template.length>0){
+        setupTicketPrototype();
+        setupTicketCreationForm();
+        setupButtonsForTicketCreation();
+    }
+}
+$(document).ready(function(){
+    setupAjax();
+    bindEventHandlers();
+    enableAllAccordions();
+    enableDragAndDrop();
+    colorizeWidgets();
+    modifyMilestonesTree();
+    setupTicketCreation();
+    loadContext();
 });

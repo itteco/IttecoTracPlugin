@@ -1,4 +1,25 @@
 # Itteco Trac Plugin Changelog #
+
+IttecoTracPlugin 0.1.14 (June 4, 2009)
+* Fix milestones json stats for cross domain usage
+
+IttecoTracPlugin 0.1.12 (May 19, 2009)
+* Add support of modifiable reports
+
+IttecoTracPlugin 0.1.12 (May 11, 2009)
+* Move widgets colorization to client side
+
+IttecoTracPlugin 0.1.11 (May 7, 2009)
+* Added possibility to create tickets on a whiteboard
+
+IttecoTracPlugin 0.1.10 (May 5, 2009)
+* Burndown enhancements
+* Saving the context of the whiteboard
+* Populate whiteboard ticket groups info from workflow configuration
+
+IttecoTracPlugin 0.1.9 (April 30, 2009)
+* Add burndown support
+
 IttecoTracPlugin 0.1.7 (February 26, 2009)
 * fixes trac 0.11.3 compatibility provided by Shane Caraveo
 * UserManagerPlugin integration

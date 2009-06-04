@@ -1,17 +1,29 @@
+from datetime import date, datetime
+
+from genshi.builder import tag
+from genshi.filters.transform import Transformer
+
 from trac.attachment import AttachmentModule
-from trac.config import ListOption
-from trac.core import Component
+from trac.config import ListOption, Option, ExtensionOption
+from trac.core import implements, Component
 from trac.mimeview import Context
 from trac.resource import Resource
 from trac.ticket import TicketSystem
 from trac.ticket.model import Type
-from trac.ticket.roadmap import MilestoneModule, RoadmapModule, TicketGroupStats, DefaultTicketGroupStatsProvider, \
-    apply_ticket_permissions,get_ticket_stats,milestone_stats_data
+from trac.ticket.roadmap import MilestoneModule, RoadmapModule, TicketGroupStats, \
+    DefaultTicketGroupStatsProvider, apply_ticket_permissions,get_ticket_stats,milestone_stats_data
+from trac.util.datefmt import get_date_format_hint, \
+    parse_date, utc, format_datetime, to_datetime, localtz
 from trac.util.translation import _
-from trac.web.chrome import add_link, add_stylesheet, add_warning
+
+from trac.web.api import ITemplateStreamFilter
+from trac.web.chrome import Chrome, add_link, add_stylesheet, add_warning
+
+from itteco.init import IttecoEvnSetup
+from itteco.scrum.burndown import IBurndownInfoProvider
 from itteco.ticket.model import StructuredMilestone
 from itteco.ticket.utils import get_fields_by_names, get_tickets_for_milestones
-from itteco.init import IttecoEvnSetup
+from itteco.utils import json
 
 def get_tickets_for_structured_milestone(env, db, milestone, field='component', types=None):
     field = ['milestone'] + ( field and (isinstance(field, basestring) and [field,] or field) or [])
@@ -20,7 +32,8 @@ def get_tickets_for_structured_milestone(env, db, milestone, field='component', 
     while sub_mils:
         mils.extend(sub_mils)
         cursor = db.cursor()
-        cursor.execute("SELECT name FROM milestone_struct WHERE parent  IN (%s) " % ("%s,"*len(sub_mils))[:-1], sub_mils)
+        cursor.execute("SELECT name FROM milestone_struct"+\
+            " WHERE parent  IN (%s) " % ("%s,"*len(sub_mils))[:-1], sub_mils)
         sub_mils = [sub_milestone for sub_milestone, in cursor if sub_milestone not in mils]
     return get_tickets_for_milestones(db, mils, get_fields_by_names(env, field), types)
 
@@ -45,8 +58,9 @@ class SelectionTicketGroupStatsProvider(Component):
         if total_cnt:
             cursor = self.env.get_db_cnx().cursor()
             str_ids = [str(x) for x in sorted(ticket_ids)]
-            cursor.execute("SELECT status, sum(cast('0'||tc.value as int)) FROM ticket t LEFT OUTER JOIN ticket_custom tc ON t.id=tc.ticket AND tc.name=%%s "
-                           "WHERE id IN (%s) GROUP BY status" % ("%s,"*len(str_ids))[:-1], [field_name,]+str_ids)
+            cursor.execute("SELECT status, sum(cast('0'||tc.value as int))"+\
+                " FROM ticket t LEFT OUTER JOIN ticket_custom tc ON t.id=tc.ticket AND tc.name=%s "+\
+                " WHERE id IN (%s) GROUP BY status" % ("%s,"*len(str_ids))[:-1], [field_name,]+str_ids)
             for s, cnt in cursor:
                 status_cnt[s] = cnt
 
@@ -87,7 +101,7 @@ class SelectionTicketGroupStatsProvider(Component):
             query_args = {}
             for s, cnt in status_cnt.iteritems():
                 if s in group['statuses']:
-                    group_cnt += cnt
+                    group_cnt += cnt or 0
                     query_args.setdefault('status', []).append(s)
             for arg in [kv for kv in group.get('query_args', '').split(',')
                         if '=' in kv]:
@@ -102,6 +116,35 @@ class SelectionTicketGroupStatsProvider(Component):
 
 
 class IttecoMilestoneModule(MilestoneModule):
+    implements(ITemplateStreamFilter)
+
+    #ITemplateStreamFilter methods
+    def filter_stream(self, req, method, filename, stream, data):
+        self.env.log.debug('data="%s"'% data.get('action'))
+        if req.path_info.startswith('/milestone') \
+            and 'edit'==req.args.get('action') and 'itteco_sprint_start.html'!=filename:
+            levels_len = len(IttecoEvnSetup(self.env).milestone_levels)
+            mil = data.get('milestone')
+            if mil and ( levels_len<2 or mil.level['index']==levels_len-2):
+                chrome = Chrome(self.env)
+                stream |=Transformer('//head').append(tag.script("""/*<![CDATA[*/
+                  jQuery(document).ready(function($) {
+                    function updateStartedDate() {
+                      var checked = $("#started").checked();
+                      $("#starteddate").enable(checked);
+                    }
+                    $("#started").click(updateStartedDate);
+                    updateStartedDate();
+                  });
+                /*]]>*/
+                """))
+                stream |= Transformer('//*[@id="edit"]//fieldset/legend').after(
+                    chrome.render_template(req, 'itteco_sprint_start.html', 
+                        {'milestone': mil,
+                         'date_hint': get_date_format_hint()}, fragment=True))
+
+        return  stream
+
     # IRequestHandler methods
     def process_request(self, req):
         milestone_id = req.args.get('id')
@@ -127,6 +170,8 @@ class IttecoMilestoneModule(MilestoneModule):
             return self._render_editor(req, db, milestone)
         elif action == 'delete':
             return self._render_confirm(req, db, milestone)
+        elif action == 'start':
+            return self._do_start(req, db, milestone)
 
         if not milestone.name:
             req.redirect(req.href.roadmap())
@@ -149,9 +194,21 @@ class IttecoMilestoneModule(MilestoneModule):
             warn('Milestone "%s" cannot be parent for itself.,Please, give it another thought' % new_name)
         else:
             milestone.parent = new_parent
-        MilestoneModule._do_save(self, req, db, milestone)
+            
+        started = req.args.get('starteddate', '')
+        if 'started' in req.args:
+            started = started and parse_date(started, req.tz) or None
+            if started and started > datetime.now(utc):
+                warn(_('Started date may not be in the future'))
+        else:
+            started = None
+        milestone.started = started
+
+        results = MilestoneModule._do_save(self, req, db, milestone)
         if warnings:
             return self._render_editor(req, db, milestone)
+        else:
+            return  results
 
     def _render_confirm(self, req, db, milestone):
         return self._delegate_call(req, db, milestone, MilestoneModule._render_confirm)
@@ -192,9 +249,11 @@ class IttecoMilestoneModule(MilestoneModule):
         selected_types = req.args.get('tkt_type', None)
         if selected_types:
             selected_types = isinstance(selected_types, list) and selected_types or [selected_types,]
-        selected_type_names = [tkt_type.name for tkt_type in Type.select(self.env) if selected_types is None or tkt_type.value in selected_types]
+        selected_type_names = [tkt_type.name for tkt_type in Type.select(self.env) 
+            if selected_types is None or tkt_type.value in selected_types]
 
-        tickets = get_tickets_for_structured_milestone(self.env, db, milestone.name, [by, calc_on], selected_type_names)
+        tickets = get_tickets_for_structured_milestone(
+            self.env, db, milestone.name, [by, calc_on], selected_type_names)
         tickets = apply_ticket_permissions(self.env, req, tickets)
         stat = SelectionTicketGroupStatsProvider(self.env).get_ticket_group_stats(tickets, calc_on)
         self.env.log.debug("The collected stats '%s'" % stat)
@@ -207,7 +266,10 @@ class IttecoMilestoneModule(MilestoneModule):
             'grouped_by': by,
             'groups': milestone_groups
             }
-        data.update(milestone_stats_data(req, stat, [m.name for m in IttecoRoadmapModule(self.env)._get_milestone_with_all_kids(milestone)]))
+        data.update(
+            milestone_stats_data(
+                req, stat, \
+                [m.name for m in _get_milestone_with_all_kids(milestone)]))
 
         if by:
             groups = []
@@ -246,19 +308,28 @@ class IttecoMilestoneModule(MilestoneModule):
                 if max_count:
                     percent = float(gstat.count) / float(max_count) * 100
                 gs_dict['percent_of_max_total'] = percent
-        tkt_types = [{'index':tkt.value, 'label': tkt.name, 'active': not selected_types or str(tkt.value) in selected_types} for tkt in Type.select(self.env)]        
+        tkt_types = [{'index':tkt.value, 'label': tkt.name, 
+            'active': not selected_types or str(tkt.value) in selected_types} 
+            for tkt in Type.select(self.env)]        
         calculate_on = IttecoRoadmapModule(self.env).get_statistics_source(calc_on)
         data.update({'tkt_types': tkt_types,'calc_on': calculate_on})
         return 'itteco_milestone_view.html', data, None
         
 class IttecoRoadmapModule(RoadmapModule):
-    _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])
+    _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])   
     def get_statistics_source(self, active = None):
-        stats_source = [{'value' : None, 'label' : 'Number of tickets', 'active': not active},]
+        stats_source = [
+            {
+                'value' : None, 
+                'label' : _('Number of tickets'), 
+                'active': not active
+            }
+        ]
         fields = TicketSystem(self.env).get_ticket_fields()
         for field in fields:
             if field['name'] in self._calculate_statistics_on:
-                stats_source.append({'value' : field['name'], 'label' : field['label'], 'active' : field['name']==active})
+                stats_source.append({'value' : field['name'], 'label' : field['label'], 
+                    'active' : field['name']==active})
         return stats_source
         
     def process_request(self, req):
@@ -267,36 +338,50 @@ class IttecoRoadmapModule(RoadmapModule):
 
         showall = req.args.get('show') == 'all'
         db = self.env.get_db_cnx()
-        milestones = [m for m in StructuredMilestone.select(self.env, showall, db)
-                      if 'MILESTONE_VIEW' in req.perm(m.resource)]
-                      
-        if req.args.get('format') == 'ics':
+        milestones = [m for m in StructuredMilestone.select(self.env, True, db)
+                        if 'MILESTONE_VIEW' in req.perm(m.resource)]
+        requested_fmt = req.args.get('format')
+        if requested_fmt == 'ics':
             self.render_ics(req, db, milestones)
             return
         max_level = len(IttecoEvnSetup(self.env).milestone_levels)
         max_level = max_level and max_level-1 or 0;
         current_level = int(req.args.get('mil_type', max_level))
-        i =0
-        calc_on = req.args.get('calc_on', None)
-        while i<current_level:
-            next_level_mils = []
-            for m in milestones:
-                next_level_mils.extend(m.kids)
-            milestones = next_level_mils
-            i+=1
-            
-        selected_types = req.args.get('tkt_type', None)
+        
+        if current_level==-1:
+            #show all milestones regardless to the level
+            milestones = sum([_get_milestone_with_all_kids(mil) for mil in milestones], [])
+        else:
+            #filter by level
+            i =0        
+            while i<current_level:
+                next_level_mils = []
+                for m in milestones:
+                    next_level_mils.extend(m.kids)
+                milestones = next_level_mils
+                i+=1
+
+        calc_on = req.args.get('calc_on')
+        selected_types = req.args.get('tkt_type')
         if selected_types:
             selected_types = isinstance(selected_types, list) and selected_types or [selected_types,]
-        selected_type_names = [tkt_type.name for tkt_type in Type.select(self.env) if selected_types is None or tkt_type.value in selected_types]
+        selected_type_names = [tkt_type.name for tkt_type in Type.select(self.env) 
+            if selected_types is None or tkt_type.value in selected_types]
 
         stats = []
+        milestones = [mil for mil in milestones if showall or not mil.is_completed]
         for milestone in milestones:
-            tickets = get_tickets_for_structured_milestone(self.env, db, milestone.name, calc_on, selected_type_names)
+            tickets = get_tickets_for_structured_milestone(
+                self.env, db, milestone.name, calc_on, selected_type_names)
             tickets = apply_ticket_permissions(self.env, req, tickets)
             stat = SelectionTicketGroupStatsProvider(self.env).get_ticket_group_stats(tickets, calc_on)
-            stats.append(milestone_stats_data(req, stat, [m.name for m in self._get_milestone_with_all_kids(milestone)]))
+            stats.append(
+                milestone_stats_data(
+                    req, stat, [m.name for m in _get_milestone_with_all_kids(milestone)]))
 
+        if requested_fmt=='json':
+            self._render_milestones_stats_as_json(req, milestones, stats)
+            return
         # FIXME should use the 'webcal:' scheme, probably
         username = None
         if req.authname and req.authname != 'anonymous':
@@ -305,10 +390,13 @@ class IttecoRoadmapModule(RoadmapModule):
                                    format='ics')
         add_link(req, 'alternate', icshref, _('iCalendar'), 'text/calendar',
                  'ics')
-        visibility = [{'index':idx, 'label': label, 'active': idx==current_level} for idx, label in enumerate(IttecoEvnSetup(self.env).milestone_levels)]
-        tkt_types = [{'index':tkt.value, 'label': tkt.name, 'active': not selected_types or str(tkt.value) in selected_types} for tkt in Type.select(self.env)]
+        visibility = [{'index':idx, 'label': label, 'active': idx==current_level} 
+            for idx, label in enumerate(IttecoEvnSetup(self.env).milestone_levels)]
+        tkt_types = [{'index':tkt.value, 'label': tkt.name, 
+            'active': not selected_types or str(tkt.value) in selected_types} 
+                for tkt in Type.select(self.env)]
         
-        calculate_on = self.get_statistics_source(req.args.get('calc_on', None))
+        calculate_on = self.get_statistics_source(req.args.get('calc_on'))
         data = {
             'milestones': milestones,
             'milestone_stats': stats,
@@ -318,15 +406,37 @@ class IttecoRoadmapModule(RoadmapModule):
             'queries': [],
             'showall': showall,
         }
+        self.env.log.debug('data:%s' % data)
         return 'itteco_roadmap.html', data, None
+                        
+    def _render_milestones_stats_as_json(self, req, milestones, statistics):        
+        stats = []
+        for idx, milestone in enumerate(milestones):
+            stat = statistics[idx]['stats']
+            stats.append(
+                {'stats': 
+                    {
+                        'count': stat.count, 
+                        'done_count':stat.done_count, 
+                        'done_percent':stat.done_percent
+                    },
+                    'milestone': milestone.name,
+                    'level': milestone.level,
+                    'due': format_datetime(milestone.due,'%Y-%m-%d %H:%M:%S')
+                }
+            )
+        json_response = json.write(stats)
+        if 'jsoncallback' in req.args:
+            json_response = req.args['jsoncallback']+'('+json_response+')'
+        req.send(json_response, 'application/x-javascript')
         
-    def _get_milestone_with_all_kids(self, milestone):
-        res = []
-        sub_mils = [milestone,]
-        while sub_mils:
-            res.extend(sub_mils)
-            next_level_mils = []
-            for m in sub_mils:
-                next_level_mils.extend(m.kids)
-            sub_mils = next_level_mils
-        return res
+def _get_milestone_with_all_kids(milestone):
+    res = []
+    sub_mils = [milestone,]
+    while sub_mils:
+        res.extend(sub_mils)
+        next_level_mils = []
+        for m in sub_mils:
+            next_level_mils.extend(m.kids)
+        sub_mils = next_level_mils
+    return res
