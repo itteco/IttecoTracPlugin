@@ -505,7 +505,7 @@ setupTicketCreation = function(){
             var href = head.attr('href');
             var tkt_id =data['ticket'];
             ticket.attr('idx', tkt_id).attr('id', 'ticket_'+tkt_id);
-            href = href.substring(href.length-3)+tkt_id;
+            href = href.substring(0,href.length-3)+tkt_id;
             head.attr('href',href).text('#'+tkt_id);
             head.next().text(data['summary']);
             $(':hidden[name="ticket"]', ticket).val(tkt_id);
