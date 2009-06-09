@@ -90,7 +90,6 @@
             
             <div class="wb-panel-section" id="wb-section3" py:if="board_type!='stories'">
                 <strong>Milestone:</strong> <span id="milestones-selected">${(milestone and isinstance(milestone, list) and ", ".join(milestone) or milestone)or 'Backlog (no milestone)'}</span>                ${render_milestones(structured_milestones, 0, show_extras=(board_type!='burndown'))}            </div>
-
             <div class="wb-panel-section" id="wb-section4" py:if="types">
                 <strong>Ticket Types:</strong> <span class="active_filter" filter="ticket_type">All</span>
                 <ul filter="ticket_type">
