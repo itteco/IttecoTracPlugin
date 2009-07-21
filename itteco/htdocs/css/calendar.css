@@ -1,0 +1,179 @@
+#container {
+	position:relative; /* needed for footer positioning*/
+	margin:0 auto; /* center, not in IE5 */
+	width:750px;
+	background:#f0f0f0;
+	
+	height:auto !important; /* real browsers */
+	height:100%; /* IE6: treaded as min-height*/
+
+	min-height:100%; /* real browsers */
+}
+div#altlinks{
+	position:absolute;
+	width:100%;
+	bottom:0; /* stick to bottom */
+    z-index: 5;
+}
+div#footer {
+	position:absolute;
+	width:100%;
+	bottom:0; /* stick to bottom */
+}
+
+/* Calendar themes */
+.calendarTheme1, .calendarTheme1Over, .calendarTheme1OverDark, .calendarTheme1Dark, .calendarTheme1Selected,.calendarTheme1SelectedDark, .calendarTheme1SelectedOver, .calendarTheme1SelectedOverDark{
+    font-size: 9px;
+    background-color:#EBF4FF;
+    border: 1px solid #A2CBFF;
+}
+
+.calendarTheme1Header {
+    color:#4C4C4C;
+    background-color:#A2CBFF;
+}
+
+.calendarTheme1Body {
+    color:#333333;
+    background-color:#EBF4FF;
+    padding: 3px;
+}
+
+.calendarTheme1Resizer {
+    border-top:1px solid white;
+    border-bottom: 1px solid white;
+}
+
+.calendarTheme2, .calendarTheme2Over, .calendarTheme2OverDark, .calendarTheme2Dark, .calendarTheme2Selected,.calendarTheme2SelectedDark, .calendarTheme2SelectedOver, .calendarTheme2SelectedOverDark{
+    font-size: 9px;
+    background-color:#649ED8;
+    border: 1px solid #004D99;
+}
+
+.calendarTheme2Header {
+    color:white;
+    background-color:#004D99;
+}
+
+.calendarTheme2Body {
+    color:black;
+    background-color: #649ED8;
+    padding: 3px;
+}
+
+.calendarTheme2Resizer{
+    border-top:1px solid white;
+    border-bottom: 1px solid white;
+}
+.calendarTheme3, .calendarTheme3Over, .calendarTheme3OverDark, .calendarTheme3Dark, .calendarTheme3Selected,.calendarTheme3SelectedDark, .calendarTheme3SelectedOver, .calendarTheme3SelectedOverDark{
+    font-size:9px;
+    background-color:#D96666;
+    border: 1px solid #A32929;
+}
+
+.calendarTheme3Header {
+    font-size:9px; color: white;
+    background-color:#A32929;
+}
+
+.calendarTheme3Body {
+    font-size: 9px;
+    background-color: #D96666;
+    padding: 3px;
+}
+
+.calendarTheme3Resizer{
+    border-top:1px solid white;
+    border-bottom: 1px solid white;
+}
+
+.calendarTheme4, .calendarTheme4Over, .calendarTheme4OverDark, .calendarTheme4Dark, .calendarTheme4Selected,.calendarTheme4SelectedDark, .calendarTheme4SelectedOver, .calendarTheme4SelectedOverDark{
+    font-size:9px;
+    background-color:#4CB052;
+    border: 1px solid #0D7813;
+}
+
+.calendarTheme4Header {
+    font-size:9px; color: white;
+    background-color:#0D7813;
+}
+
+.calendarTheme4Body {
+    font-size: 9px;
+    background-color: #4CB052;
+    padding: 3px;
+}
+
+.calendarTheme4Resizer{
+    border-top:1px solid white;
+    border-bottom: 1px solid white;
+}
+
+.calendarTheme5, .calendarTheme5Over, .calendarTheme5OverDark, .calendarTheme5Dark, .calendarTheme5Selected,.calendarTheme5SelectedDark, .calendarTheme5SelectedOver, .calendarTheme5SelectedOverDark{
+    font-size: 9px;
+    background-color:#F2A640;
+    border: 1px solid #BE6D00;
+}
+
+.calendarTheme5Header {
+    font-size: 9px;
+    color: white;
+    background-color:#BE6D00;
+}
+
+.calendarTheme5Body {
+    font-size: 9px;
+    color:black;
+    background-color: #F2A640;
+    padding: 3px;
+}
+
+.calendarTheme5Resizer {
+    border-top:1px solid white;
+    border-bottom: 1px solid white;
+}
+
+.calendarTheme6, .calendarTheme6Over, .calendarTheme6OverDark, .calendarTheme6Dark, .calendarTheme6Selected,.calendarTheme6SelectedDark, .calendarTheme6SelectedOver, .calendarTheme6SelectedOverDark{
+    font-size:9px;
+    background-color:#649ED8;
+    border: 1px solid #004D99;
+}
+
+.calendarTheme6 .eventWindowHeader {
+    font-size:9px; color: white;
+    background-color:#004D99;
+}
+
+.calendarTheme6 .eventWindowBody {
+    font-size: 9px;
+    background-color: #649ED8;
+    padding: 3px;
+}
+
+.calendarTheme6 .eventWindowResizer{
+    border-top:1px solid white;
+    border-bottom: 1px solid white;
+}
+
+.calendarTheme7, .calendarTheme7Over, .calendarTheme7OverDark, .calendarTheme7Dark, .calendarTheme7Selected,.calendarTheme7SelectedDark, .calendarTheme7SelectedOver, .calendarTheme7SelectedOverDark{
+    font-size:9px;
+    background-color:#A7A77D;
+    border: 1px solid #6E6E41;
+   
+}
+
+.calendarTheme7Header {
+    font-size:9px; color: white;
+    background-color:#6E6E41;
+}
+
+.calendarTheme7Body {
+    font-size: 9px;
+    background-color: #A7A77D;
+    padding: 3px;
+}
+
+.calendarTheme7Resizer{
+    border-top:1px solid white;
+    border-bottom: 1px solid white;
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="layout.html" />
+  <xi:include href="macros.html" />
+ <head>
+  <title>Itteco Trac Calendar</title>
+	<SCRIPT>
+    var isomorphicDir="${href('/chrome/itteco/isomorphic')}/";
+    var eventsUrl = "${href.calendar('events')}?format=json";
+    var calendarUrl = "${href.calendar('calendars')}?format=json";
+    var ticketsUrl = "${href.calendar('tickets')}?format=json";
+    </SCRIPT>
+    <script src="${href('/chrome/itteco/isomorphic/system/modules/ISC_Core.js')}"/>
+    <script src="${href('/chrome/itteco/isomorphic/system/modules/ISC_Foundation.js')}"/>
+    <script src="${href('/chrome/itteco/isomorphic/system/modules/ISC_Containers.js')}"/>
+    <script src="${href('/chrome/itteco/isomorphic/system/modules/ISC_Grids.js')}"/>
+    <script src="${href('/chrome/itteco/isomorphic/system/modules/ISC_Forms.js')}"/>
+    <script src="${href('/chrome/itteco/isomorphic/system/modules/ISC_DataBinding.js')}"/>
+    <script src="${href('/chrome/itteco/isomorphic/system/modules/ISC_Calendar.js')}"/>
+    <script src="${href('/chrome/itteco/isomorphic/skins/Enterprise/load_skin.js')}"/>
+ </head> 
+ <body> 
+  <div id="calendarboard" style="min-height:100%;width:100%">
+      <SCRIPT SRC="${chrome.htdocs_location}../itteco/js/sm.calendar.js"/>
+  </div>
+ </body>
+</html>

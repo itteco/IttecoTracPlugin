@@ -1,0 +1,24 @@
+<SCRIPT>//'"]]>>isc_loginSuccess
+//
+// When doing relogin with a webserver-based authenticator, protect this page with it and
+// target your login attempts at this page such that when the login succeeds, this page is
+// returned.
+//
+// If you are integrating with a web service that returns a fault, paste this entire script
+// block VERBATIM into the fault text.
+
+while (!window.isc && document.domain.indexOf(".") != -1) {
+    try {
+        if (parent.isc == null) {
+            document.domain = document.domain.replace(/.*?\./, '');
+            continue;
+        } 
+        break;
+    } catch (e) {
+        document.domain = document.domain.replace(/.*?\./, '');
+    }
+}
+
+var isc = top.isc ? top.isc : window.opener ? window.opener.isc : null;
+if (isc) isc.RPCManager.delayCall("handleLoginSuccess", [window]);
+</SCRIPT>

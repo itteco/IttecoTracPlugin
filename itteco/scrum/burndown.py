@@ -1,9 +1,9 @@
 from copy import deepcopy
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
-from trac.config import Option, ListOption
+from trac.config import Option, BoolOption, ListOption
 from trac.core import Component, Interface, implements, TracError
 from trac.ticket.api import ITicketChangeListener
 from trac.ticket.model import Type
@@ -23,7 +23,11 @@ class AbstractBurndownInfoProvider(Component):
     
     """ Extension option for snapshot strategy that is to be used building burndown"""
     abstract = True
-
+    
+    fill_idle_days = BoolOption('itteco-whiteboard-config', 'show_idle_days_on_burndown', 
+        False,
+        doc="Switch on/off display of horisontal line on idle days within a burndown chart.")
+        
     initial_plan_element = ListOption('itteco-whiteboard-tickets-config', 'initial_plan_element', 
         ['task'],
         doc="Job progress for a burndown chart would be calculated in the given type of ticket.")
@@ -104,14 +108,23 @@ class AbstractBurndownInfoProvider(Component):
         
         scope_types = IttecoEvnSetup(self.env).scope_element
         types = self._work_types()
+        one_day_delta = timedelta(1)
         
         metrics = [{'datetime': mil.started, 'burndown': scope, 'burnup': [0]*len(types)}]
+        def clone_item(item, new_time):
+            item = deepcopy(item)
+            item['datetime']= new_time
+            metrics.append(item)
+            return item
+            
         for ts, ttype, sum in self._burnup_info(mil):
             last = metrics[-1]
             if ts!=last['datetime']:
-                last = deepcopy(last)
-                last['datetime']= ts
-                metrics.append(last)
+                if self.fill_idle_days:
+                    time_delta = ts - last['datetime']
+                    if time_delta.days>1:
+                        last = clone_item(last, ts-one_day_delta)
+                last = clone_item(last, ts)
 
             if ttype in self.initial_plan_element:
                 #this ticket type should influence burndown
@@ -204,21 +217,34 @@ class DateBurndownInfoProvider(AbstractBurndownInfoProvider):
         base_sql = None
         params = list(mil_names)
         group_by = " GROUP BY t.id, t.type"
+        final_statuses = IttecoEvnSetup(self.env).final_statuses
+        status_params = ("%s,"*len(final_statuses))[:-1]
+        params = final_statuses+ final_statuses + params
         if self.count_burndown_on =='quantity':
             base_sql = """SELECT MAX(c.time), t.id, t.type, 1
                 FROM ticket t 
                     LEFT JOIN milestone m ON m.name=t.milestone 
                     LEFT OUTER JOIN ticket_change c ON t.id=c.ticket 
-                        AND c.field='status' AND c.newvalue='closed' 
-                WHERE t.status='closed' AND m.name IN (%s)""" % ("%s,"*len(mil_names))[:-1]
+                        AND c.field='status' AND c.newvalue IN (%s) 
+                WHERE IN (%s) AND m.name IN (%s)""" % \
+                    ( 
+                        status_params, 
+                        status_params, 
+                        ("%s,"*len(mil_names))[:-1]
+                    )
         else:
             base_sql = "SELECT MAX(c.time), t.id, t.type, "+db.cast(db.concat('0','tc.value'),'int')+ \
                 """FROM ticket t 
                     LEFT JOIN milestone m ON m.name=t.milestone 
                     LEFT JOIN ticket_custom tc ON t.id=tc.ticket AND tc.name=%%s
                     LEFT OUTER JOIN ticket_change c ON t.id=c.ticket AND c.field='status' 
-                        AND c.newvalue='closed' 
-                WHERE t.status='closed' AND m.name IN (%s)""" % ("%s,"*len(mil_names))[:-1]
+                        AND c.newvalue IN (%s) 
+                WHERE t.status IN (%s) AND m.name IN (%s)""" % \
+                    (
+                        status_params, 
+                        status_params, 
+                        ("%s,"*len(mil_names))[:-1]
+                    )
             params =[self.count_burndown_on] + params
             group_by +=", tc.value"
         if tkt_type:
