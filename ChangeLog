@@ -1,4 +1,6 @@
 # Itteco Trac Plugin Changelog #
+IttecoTracPlugin 0.2.0 (July 21, 2009)
+* Added calendars support 
 
 IttecoTracPlugin 0.1.14 (June 4, 2009)
 * Fix milestones json stats for cross domain usage
