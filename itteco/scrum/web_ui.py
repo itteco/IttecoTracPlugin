@@ -489,7 +489,7 @@ class DashboardModule(Component):
                 ticket.save_changes(get_reporter_id(req, 'author'), None, db=db)
             else:
                 ticket['status']='new'
-                ticket['reporter']=ticket['owner']
+                ticket['reporter']=get_reporter_id(req, 'author')
                 ticket.insert(db=db)
                 data['status']=ticket['status']
                 data['ticket']=ticket.id

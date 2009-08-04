@@ -430,11 +430,16 @@ isc.Window.create({
 
 var observer = isc.Class.create({
     adjustRelationsMonitor : function(dialog){
-      var f = dialog.items[0];
-      var observer = this;
-      f.itemChanged = function(item, newValue){observer.adjustFieldsState(f, item, newValue); };
-      this.adjustFieldsState(f);
-      this.setDefaults(f);
+        if(hasActiveCalendar()){
+          var f = dialog.items[0];
+          var observer = this;
+          f.itemChanged = function(item, newValue){observer.adjustFieldsState(f, item, newValue); };
+          this.adjustFieldsState(f);
+          this.setDefaults(f);
+        }else{
+            dialog.hide();
+            isc.warn('In order to create events you need to create and activate your own calendar.');
+        }
     },
     
     adjustFieldsState: function(form, item, newValue){

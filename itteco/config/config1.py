@@ -53,7 +53,7 @@ def upgrade_to_0_1_2(env, db, installed_version):
             pass
     available_sections = [s for s in env.config.sections()]
     cfg = Configuration(resource_filename(__name__, 'sample.ini'))
-    for section in cfg.sections():
+    for section in cfg.parser.sections():
         if section[:6]!='itteco' or section not in available_sections:
             target_cfg = env.config[section]
             for option, value in cfg.options(section):

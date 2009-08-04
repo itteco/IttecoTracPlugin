@@ -5,7 +5,6 @@ decorateDropBox = function(){
     $('.control-panel a', box).bind('click', function(e){
         var content = $('#dropbox .content');
         if(content.is(":visible")){
-            console.log('saving height',box.height());
             box.attr('savedHeight', box.height());
         }
         var cp = $(this).parent();
@@ -14,7 +13,6 @@ decorateDropBox = function(){
         if(content.is(":visible")){
             box.resizable("enable");
             if(box.is('[savedHeight]')){
-                console.log('restoring height',box.attr('savedHeight'));
                 box.height(box.attr('savedHeight')+'px');
             }
         }else{
@@ -48,7 +46,6 @@ disableTickets = function(tkts){
 }
 enableTickets = function(tkts){
     $(":checked", tkts).removeAttr('disabled').attr('checked', false);
-    console.log(tkts);
     $('td.ticket',tkts).draggable(draggable_options);
 }
 enableDragAndDrop = function(){

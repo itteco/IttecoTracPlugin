@@ -3,13 +3,30 @@
       xmlns:py="http://genshi.edgewall.org/"
       xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
     <?python from itteco.utils.render import * ?>
+<?python
+def gentrans(group):
+   out = {}
+   for trans in group['transitions']:
+      for old_state in trans['oldstates']:
+         out[old_state] = trans['action']
+   return ','.join('"%s":"%s"' % (key, value) for key, value in out.items())
+   
+def stats_status_to_group(stats_config):
+   out = {}
+   for cfg in stats_config:
+      for s in cfg['statuses']:
+         out[s] = cfg['name']
+   return ','.join('"%s":"%s"' % (key, value) for key, value in out.items())
+?>
      <div py:def="render_js_config()" py:strip="">
         window.progress_field_name = "${progress_field.name}";
         window.current_milestone = ${as_js_dict(milestone)};
         window.groups_config = {
         <py:for each="group in groups">
             "${group['name']}" : {
-            "transitions" : { ${','.join('"%s":"%s"' % (old_state, trans['action']) for trans in group['transitions'] for old_state in trans['oldstates'])}},
+            "transitions" : {
+               ${  gentrans(group)  }
+            },
             "statuses" : ${as_js_dict(group['status'])}
             },
         </py:for>
@@ -33,7 +50,7 @@
             "x":1
         };
 
-        window.stats_status_to_group = {${','.join(["'%s':'%s'" % (s, cfg['name']) for cfg in stats_config for s in cfg['statuses']])}};
+        window.stats_status_to_group = {${stats_status_to_group(stats_config)}};
         window.actionUrl = "${href.whiteboard('modify')+'?action=change_task'}";        
      </div>
      <div py:def="render_milestones(items, level, maxlevel=-1, show_extras=True)" py:strip="">
@@ -71,7 +88,7 @@
     <div py:def="render_field(ticket, field)" py:strip="">
       ${field['label']}:<br/>
       <py:choose test="field.type" py:if="field">
-        <select py:when="'select'" id="field-${field.name}" name="field_${field.name}">
+        <select py:when="'select'" name="field_${field.name}">
           <option py:if="field.optional"></option>
           <option py:for="option in field.options"
                   selected="${ticket[field.name] == option or None}"
@@ -83,7 +100,7 @@
                     py:content="option"></option>
           </optgroup>
         </select>
-        <textarea py:when="'textarea'" id="field-${field.name}" name="field_${field.name}"
+        <textarea py:when="'textarea'" name="field_${field.name}"
                   cols="${field.width or 40}" rows="${field.height or 4}"
                   class="${field.format == 'wiki' and 'wikitext' or None}"
                   py:content="value"></textarea>
@@ -98,7 +115,7 @@
                  checked="${ticket[field.name] == option or None}" />
           ${option}
         </label>
-         <input py:otherwise="" type="text" id="field-${field.name}" 
+         <input py:otherwise="" type="text" 
               name="field_${field.name}" value="${ticket[field.name]}" />
       </py:choose>
     </div>

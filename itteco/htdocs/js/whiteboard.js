@@ -65,7 +65,7 @@ function WBContext(){
 var wbContext = new WBContext();
 
 update_cell = function(cell, ignore_id){
-    var row_stat = cell.siblings('.group_holder');
+    var row_stat = cell.siblings().andSelf().filter('.group_holder');
     var group_filter ="[status='"+ cell.attr('status')+"']";
     
     var selector = '.widget';
@@ -496,7 +496,7 @@ setupTicketCreation = function(){
             height:window.clientHeight*0.9+30,
             width:400,
             overlay:{'opacity':'0.5', 'background-color':'#CACACA'}, 
-            close: function(event, ui){$(this).dialog('destroy');}});    
+            close: function(event, ui){$(this).dialog('destroy');}});
     }
     function postprocessTicketCreation(ticket, data){
         defaultPostprocess(ticket, data);
