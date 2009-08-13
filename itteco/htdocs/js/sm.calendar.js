@@ -395,7 +395,7 @@ isc.Window.create({
             dataSource: calendarDS,
             fields: [
                 {name: "type", type: "radioGroup", valueMap: {P:"Keep it Private", S:"Share with Everyone", R:"Add Shared Calendar"},
-                    vertical: false, title : "Sharing", colSpan: 3, defaultValue: 'P',
+                    vertical: false, title : "Sharing", colSpan: 3, required: true, defaultValue: 'P',
                     change: "if(value!='R'){form.getField('ref').hide();}else{form.getField('ref').show();}"
                 },
                 {name: "ref", title:"Referenced", type:"select",
@@ -405,8 +405,8 @@ isc.Window.create({
                   change: "form.getField('name').setValue(this.mapValueToDisplay(value))",
                   colSpan: 3,
                 },
-                {name: "name", title: "Display Name", colSpan: 3, width: "*"},                
-                {name: "theme", type:"select",  colSpan: 3, valueMap: 
+                {name: "name", title: "Display Name", colSpan: 3, required: true, width: "*"},                
+                {name: "theme", type:"select",  colSpan: 3, required: true, valueMap: 
                     { 
                         1:'<div class="calendarTheme1">Theme 1</div>',
                         2:'<div class="calendarTheme2">Theme 2</div>',
@@ -418,7 +418,7 @@ isc.Window.create({
                     }
                 },
                 {type: "button", title: "Save", endRow: false,
-                    click: "calendarEditForm.saveData(function(){calendarsList.filterData()});modalWindow.hide();" 
+                    click: "calendarEditForm.saveData(function(){calendarsList.filterData();modalWindow.hide();});" 
                 },
                 {type: "button", title: "Delete", showIf: "typeof(values.calendarId)!='undefined'",  startRow: false,
                     click: "calendarDS.removeData(form.getValues(),function(){calendarsList.filterData()});modalWindow.hide();" 

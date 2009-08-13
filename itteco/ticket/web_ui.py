@@ -1,12 +1,17 @@
 import re
 
+from datetime import datetime
+
 from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
 from trac.core import Component, implements
-from trac.search.web_ui import SearchModule
+from trac.resource import Resource
 from trac.ticket import Ticket, Type
 from trac.ticket.web_ui import TicketModule
+from trac.timeline.api import ITimelineEventProvider
+from trac.search.web_ui import SearchModule
+from trac.util.datefmt import to_timestamp, utc
 from trac.util.translation import _
 from trac.util.text import to_unicode
 from trac.web.api import IRequestHandler, IRequestFilter, ITemplateStreamFilter
@@ -20,7 +25,7 @@ from itteco.utils.json import write
 from itteco.utils.render import hidden_items
 
 class IttecoTicketModule(Component):
-    implements(ITemplateStreamFilter, IRequestFilter)
+    implements(ITemplateStreamFilter, ITimelineEventProvider, IRequestFilter)
     
     # IRequestFilter methods
     def pre_process_request(self, req, handler):
@@ -133,6 +138,53 @@ class IttecoTicketModule(Component):
         if wikifilters:
             filters += [{'name': f[0], 'label':f[1], 'active': True } for f in wikifilters]
         return filters
+        
+    # ITimelineEventProvider methods
+    def get_timeline_filters(self, req):
+        if 'TICKET_VIEW' in req.perm and not TicketModule(self.env).timeline_details:
+            yield ('ticket_comments', _('Commented tickets'))
+
+    def get_timeline_events(self, req, start, stop, filters):
+        ticket_realm = Resource('ticket')
+
+        # Ticket comments
+        if 'ticket_comments' in filters:
+            event_renderer = TicketModule(self.env)
+            
+            def produce_event((id, ts, author, type, summary, description),
+                              comment, cid):
+                ticket = ticket_realm(id=id)
+                if 'TICKET_VIEW' not in req.perm(ticket):
+                    return None
+                return ('commentedticket', datetime.fromtimestamp(ts, utc), author,
+                        (ticket, 'commented', '', summary, 'edit', None, type,
+                         description, comment, cid), event_renderer)
+
+            ts_start = to_timestamp(start)
+            ts_stop = to_timestamp(stop)
+                         
+            db = self.env.get_db_cnx()
+            cursor = db.cursor()
+
+            cursor.execute("SELECT t.id,tc.time,tc.author,t.type,t.summary, "
+                           "       tc.field,tc.oldvalue,tc.newvalue "
+                           "  FROM ticket_change tc "
+                           "    INNER JOIN ticket t ON t.id = tc.ticket "
+                           "      AND tc.time>=%s AND tc.time<=%s "
+                           "      AND tc.field='comment' "
+                           "      AND tc.newvalue IS NOT NULL "
+                           "      AND tc.newvalue<>'' "
+                           "ORDER BY tc.time"
+                           % (ts_start, ts_stop))
+            for id,t,author,type,summary,field,oldvalue,comment in cursor:
+                cid = oldvalue and oldvalue.split('.')[-1]
+                ev = produce_event((id, t, author, type, summary, None), 
+                                   comment, cid)
+                if ev:
+                    yield ev
+                    
+    def render_timeline_event(self, context, field, event):
+        pass#we are delegating rendering to standard trac TicketModule
 
 class JSonSearchtModule(Component):
     implements(IRequestHandler)
