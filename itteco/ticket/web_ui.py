@@ -91,7 +91,7 @@ class IttecoTicketModule(Component):
                  }
             req.chrome.setdefault('ctxtnav',[]).insert(
                 -1, tag.a(
-                    _('Open Containing Whiteboard'), 
+                    _('Go To Whiteboard'), 
                     href=req.href.whiteboard('team_tasks', data['ticket']['milestone'] or 'none')))
             stream |=Transformer('//*[@id="field-milestone"]').replace(
                 chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
@@ -106,8 +106,9 @@ class IttecoTicketModule(Component):
             mydata['filters']=data.get('filters',[])
             stream |=Transformer('//*[@id="ticket"]').append(
                 chrome.render_template(req, 'itteco_links.html', mydata, fragment=True))
-            stream |=Transformer('//*[@id="content"]').after(
-                chrome.render_template(req, 'itteco_search_pane.html', mydata, fragment=True));
+            if req.args.get('action')!='diff':
+                stream |=Transformer('//*[@id="content"]').after(
+                    chrome.render_template(req, 'itteco_search_pane.html', mydata, fragment=True));
             stream |= Transformer('//*[@id="propertyform"]').append( \
                 tag(hidden_items('links_ticket', data['ticket_links'].outgoing_links), \
                     hidden_items('links_wiki', data['ticket_links'].wiki_links)))

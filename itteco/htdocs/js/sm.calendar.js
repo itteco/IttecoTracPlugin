@@ -217,9 +217,9 @@ var timeTrackFields = [
     {name : 'auto', type: 'checkbox', title: 'Auto', startRow: false},
     {name : 'time', type: 'time', title: 'Time', colSpan: 3}
 ];
-isc.HLayout.create({
+var calendarLayout = isc.HLayout.create({
     position:"relative",
-    width:"95%",
+    width:$('#calendarboard').innerWidth(),
     height:isc.Page.getHeight()-170,
     members: [
         isc.VLayout.create({
@@ -530,3 +530,8 @@ var observer = isc.Class.create({
 });
 observer.observe(eventCalendar.eventDialog, 'show', 'observer.adjustRelationsMonitor(this)');
 observer.observe(eventCalendar.eventEditorLayout, 'show', 'observer.adjustRelationsMonitor(this)');
+
+$(window).resize(function(){
+  var cb = $('#calendarboard');
+  calendarLayout.resizeTo(cb.innerWidth(),$(window).height()-cb.offset().top-$('.footer').height());
+});

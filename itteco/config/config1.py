@@ -1,3 +1,4 @@
+from ConfigParser import ConfigParser
 from pkg_resources import resource_filename
 import os
 from trac.config import Configuration
@@ -52,12 +53,13 @@ def upgrade_to_0_1_2(env, db, installed_version):
         except:        
             pass
     available_sections = [s for s in env.config.sections()]
-    cfg = Configuration(resource_filename(__name__, 'sample.ini'))
-    for section in cfg.parser.sections():
+    cfg = ConfigParser()
+    cfg.read(resource_filename(__name__, 'sample.ini'))
+    for section in cfg.sections():
         if section[:6]!='itteco' or section not in available_sections:
             target_cfg = env.config[section]
-            for option, value in cfg.options(section):
-                target_cfg.set(option, value)
+            for option in cfg.options(section):
+                target_cfg.set(option, cfg.get(section, option))
 
     custom = env.config['ticket-custom']
     if 'business_value' not in custom or custom.get('business_value')!='select':
