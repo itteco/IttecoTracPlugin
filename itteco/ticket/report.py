@@ -16,8 +16,7 @@ class IttecoReportModule(Component):
     
     #ITemplateStreamFilter methods
     def filter_stream(self, req, method, filename, stream, data):
-        if filename=='report_view.html':
-            self.env.log.debug("report data='%s'" % (data,))
+        if req.path_info.startswith('/report/'):
             id = req.args.get('id')
             action = req.args.get('action', 'view')
             header_groups = data.get('header_groups')
@@ -27,14 +26,20 @@ class IttecoReportModule(Component):
                     if self._are_all_mandatory_fields_found(header_groups[0]):
                         link_builder = req.href.chrome
                         script_tag = lambda x: tag.script(type="text/javascript", src=link_builder(x))
-                        stream |= Transformer("//head").append(tag(
-                            # TODO fix scripts base path
-                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css")),
-                            script_tag("itteco/js/jquery.ui/ui.core.js"),
-                            script_tag("itteco/js/jquery.ui/ui.draggable.js"),
-                            script_tag("itteco/js/jquery.ui/ui.droppable.js"),
-                            script_tag("itteco/js/jquery.ui/ui.resizable.js"),
-                            script_tag("itteco/js/report.js")))
+                        stream |= Transformer("//head").prepend(
+                                tag(
+                                    # TODO fix scripts base path
+                                    tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css"))
+                                )
+                            ).append(
+                                tag(
+                                    script_tag("itteco/js/jquery.ui/ui.core.js"),
+                                    script_tag("itteco/js/jquery.ui/ui.draggable.js"),
+                                    script_tag("itteco/js/jquery.ui/ui.droppable.js"),
+                                    script_tag("itteco/js/jquery.ui/ui.resizable.js"),
+                                    script_tag("itteco/js/report.js")
+                                )
+                            )
                             
                         args = ReportModule(self.env).get_var_args(req)
                         db = self.env.get_db_cnx()
