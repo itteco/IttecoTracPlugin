@@ -46,6 +46,7 @@ body{
     background-color: #D1D1D1; 
     font-size: 1.3em;
     font-weight: bolder;
+    margin: 0px;
     opacity: 0.8;
 }
 #dropbox .content .odd{ 
