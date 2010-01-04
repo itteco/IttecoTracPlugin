@@ -1,4 +1,25 @@
-var popup_context = {};
+function showPopup(ticket, popupName){
+    function cancel(){
+        tb_remove();
+        return false;
+    }
+
+    window.popup_context = {
+        cancel : cancel,
+        setup  :function (root){},
+        done : cancel
+    }
+    tb_show('',document.location.pathname+"/../../popup/tickets/"+ticket+'?height=570&width=520');
+}
+function showQuickEditor(ticket){
+    showPopup(ticket,'tickets');
+}
+function showCommentEditor(ticket){
+    showPopup(ticket,'comment');
+}
+function showFullEditor(ticket){
+    document.location = window.urls.base+'/ticket/'+ticket;
+}
 
 (function($){
     
@@ -21,6 +42,62 @@ var popup_context = {};
             };
             
             var options = $.extend(defaults, options);
+            function log(){
+                if (options.debug && typeof console!='undefined'){
+                    console.log.apply("", arguments);
+                }
+            }
+            function ContextMenu() {
+                $('body').append('<div id="inline-menu"><div id="inline-menu-body"></div></div>');
+                
+                var inlineMenu 		= $('#inline-menu');
+                var inlineMenuBody 	= $('#inline-menu-body');
+                // show menu
+                function showInlineMenu(element) {
+                    log('element', element, $(element));
+                    offset = $(element).offset();
+                    inlineMenu.css('left',offset.left);
+                    inlineMenu.css('top',offset.top);
+                    menuItems = getInlineMenu(element);
+                    if (menuItems) {
+                        inlineMenuBody.html('<div>' + $(element).outerHTML() + '</div>' + menuItems);
+                        inlineMenu.show();	
+                    }
+                }
+                
+                // get menu items
+                function getInlineMenu(element) {
+                    var ticket = $(element).text().substr(1);
+                    if ($(element).hasClass('ticket-pointer')) {
+                        menu = '<ul>';
+                        menu += '<li class="inline-menu-item-ticket-quick-editor"><a href="#quickeditor" onclick="showQuickEditor(\'' + ticket + '\')">Quick Editor</a></li>';
+                        menu += '<li class="inline-menu-item-ticket-comment"><a href="#comment" onclick="showCommentEditor(\'' + ticket + '\')">Comment</a></li>';
+                        menu += '<li class="inline-menu-item-ticket-full-editor"><a href="#fulleditor" onclick="showFullEditor(\'' + ticket + '\')">Full Editor</a></li>';
+                        menu += '</ul>';
+                    }
+                    return menu;
+                }
+
+                function attach(obj){
+                    $(obj).mouseover(
+                        function() {
+                            showInlineMenu(this);
+                        }								
+                    );
+                }
+                
+                // events
+                this.attachTo = attach;
+                
+                attach($('.ticket-pointer'));
+                
+                $(inlineMenu).hover(
+                    function(event) {},
+                    function(event) {
+                        $(inlineMenu).hide();
+                    }
+                );
+            }
 
             var disableTickets = function(tkts){
                 $(":checked", tkts).attr('disabled', 'disabled');
@@ -121,16 +198,12 @@ var popup_context = {};
             var decorateTickets = function(itemsContainer){
                 var tkts = $('td.ticket', itemsContainer);
                 tkts.css('cursor','move').prepend('<input type="checkbox"/>');
+                var contextMenu = new ContextMenu();
+                contextMenu.attachTo($('a', tkts).addClass('ticket-pointer'));
                 tkts.each(function(i){
                     var t = $(this);
-                    var l = $('a', t);
-                    var tkt_id = l.text().substring(1);
+                    var tkt_id = $('a', t).text().substring(1);
                     t.attr('ticket', tkt_id);
-                    
-                    if(!l.hasClass('thickbox-enabled')){
-                        l.addClass('thickbox-enabled').attr('href', document.location.pathname+"/../../whiteboard/modify/"+tkt_id+"?height=570&width=520");
-                        tb_init(l);
-                    }
                 });
                 tkts.draggable(options.draggable_options);
             };
@@ -158,34 +231,17 @@ var popup_context = {};
                 });
             };
             
-            var setupTicketEditingForm = function(){
-                popup_context['setup']=function (root){
-                    $(':button', root).attr('onclick','').unbind('click').click(function(){tb_remove();});
-                    $('form', root).attr('onsubmit', '').unbind('submit').submit(
-                        function(){
-                            var tkt_id = $('ticket', this).val();
-                            $('td.ticket[ticket="'+tkt_id+'"]').attr('disabled', 'disabled');
-                            $.getJSON(
-                                document.location.pathname+"/../../whiteboard/modify/"+tkt_id, 
-                                'action=change_task&'+$(this).serialize()
-                            );
-                            
-                            tb_remove();
-                            return false;
-                        }
-                    );
-                }
-            };
-
             decorateDropBox();
             decorateDropBoxItems(options.drop_box_items_selector);
-            setupTicketEditingForm();
             
             return this.each(function(){
                 var o = options;
                 setupGroup($(this));
                 decorateTickets(o.groupItemsContainer(this));
             });
+        },
+        outerHTML : function() {
+            return $('<div>').append(this.eq(0).clone()).html();
         }
     });
 })(jQuery);

@@ -37,6 +37,7 @@ class IttecoReportModule(Component):
                             script_tag("itteco/js/jquery.ui/ui.resizable.js"),
                             script_tag('itteco/js/thickbox/thickbox.js'),
                             script_tag('itteco/js/custom_select.js'),
+                            script_tag('itteco/js/jquery.rpc.js'),
                             script_tag("itteco/js/report.js")
                         )
                     )

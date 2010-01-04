@@ -1,14 +1,15 @@
+var contextMenu ;
 var draggable_options ={helper: 'clone', handle: '.drag_handle', opacity: 0.8, 'start' : function(e, ui){ui.helper.css('width',this.offsetWidth+'px');}};
-var popup_context = {};
 var rpc;
+window.popup_context = {};
 
 jQuery.fn.outerHTML = function() {
 	return $('<div>').append(this.eq(0).clone()).html();
 };	
 
 function log(){
-    if(console && console.log){
-        console.log.apply(console, arguments);
+    if(typeof console !='undefined' && console.log){
+        console.log.apply("", arguments);
     }
 }
 
@@ -313,7 +314,7 @@ teamMemberPrepare=function(ticket, member) {
 }
 
 defaultPostprocess = function(ticket, data){
-    console.log('defaultPostprocess', ticket, data);
+    log('defaultPostprocess', ticket, data);
     if (data.result=='done'){
         var mil = data.milestone;
         var parent = ticket.parent();
@@ -517,10 +518,10 @@ setupTicketCreation = function(){
             }
             href = path.substring(0,path.length-3)+tkt_id + (query!="" ? '?'+query : "") ;
             head.attr('href',href).text('#'+tkt_id);
-            head.next().text(data['summary']);
+            head.parent().next().text(data['summary']);
             $(':hidden[name="ticket"]', ticket).val(tkt_id);
             ticket.draggable(draggable_options);
-            tb_init(head);
+            contextMenu.attachTo($('.ticket-pointer', ticket));
         }
     }
 
@@ -577,26 +578,6 @@ setupTicketCreation = function(){
     }
 }
 
-function setupPopupEditor(){
-    var pointers = $('a.ticket_pointer');
-
-    if(pointers.length>0){
-        pointers.click(function(){
-            var widget = $(this).parents('.widget');
-            window.popup_context = {
-                cancel : cancel,
-                setup  :function (root){},
-                done : function(tkt){
-                    log('popup reports that action was done', tkt);
-                    tkt.result = 'done';//hack to be removed
-                    defaultPostprocess(widget, tkt);                    
-                    return cancel();
-                }
-            }
-        });
-        tb_init(pointers);
-    }
-}
 function showPopup(ticket, popupName){
     function cancel(){
         tb_remove();
@@ -628,9 +609,6 @@ function showCommentEditor(ticket){
 function showFullEditor(ticket){
     document.location = window.urls.base+'/ticket/'+ticket;
 }
-
-
-
 
 function ContextMenu() {
     jQuery('body').append('<div id="inline-menu"><div id="inline-menu-body"></div></div>');
@@ -684,9 +662,6 @@ function ContextMenu() {
 	);
 }
 
-var contextMenu ;
-
-
 $(document).ready(function(){
     setupAjax();
     bindEventHandlers();
@@ -696,6 +671,5 @@ $(document).ready(function(){
     modifyMilestonesTree();
     setupTicketCreation();
     contextMenu = new ContextMenu()
-    //setupPopupEditor();
     loadContext();
 });
