@@ -1,0 +1,133 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+<head>
+<script type="text/javascript">/*<![CDATA[*/
+    function ticketFormManager(rootSel, sysUrl){ 
+        var rpc;            
+        var root = $(rootSel);
+        
+        function log(){
+            if(console && console.log){
+                console.log.apply(console, arguments);
+            }
+        }
+        function setupCallback(root){
+            if(window.popup_context && window.popup_context.setup){
+                popup_context.setup(root);
+            }
+        }
+        
+        function notify(vo){
+            log('nofity-parent',window.popup_context, vo);
+            if(window.popup_context && window.popup_context.done){
+                window.popup_context.done(vo);
+            }
+        }
+        
+        function handleTicketResp(resp){
+            var tkt = resp.result[3];
+            tkt.id = resp.result[0];
+            notify(tkt);
+        }
+
+        function commentTicket(id, comment){
+            rpc.ticket.update(
+                handleTicketResp,
+                Number(id),
+                comment
+            );
+        }
+
+        function bindHandlers(){
+            log('bindHandlers', $('form', root));
+            $('form', root).submit(function(){
+                try{
+                    commentTicket(
+                        $(":input[name='ticket']", root).val(),
+                        $(":input[name='comment']", root).val()
+                    );
+                }catch(e){log('action-failed with exception', e);}
+                return false;
+            });
+            
+            $('.cancel', root).click(function(){
+                if(window.popup_context && window.popup_context.cancel){
+                    window.popup_context.cancel();
+                }
+            });
+        }
+                   
+        function setupRpc(url){
+            rpc = $.rpc(
+               url,
+               "xml",
+               function(server) {
+                    if(!server || !server.system) {
+                        alert("Could not get the rpc object ..");
+                        return;
+                    }
+                }
+            );
+
+        }
+        function init(){
+            setupCallback(root);
+            bindHandlers();
+            setupRpc(sysUrl);
+        }
+        
+        init();
+    };
+
+    jQuery(document).ready(function(){
+        ticketFormManager("#popup-ticket-comment", "${href.login('xmlrpc')}");    
+    });
+/*]]>*/</script>
+</head>
+<body>
+    <py:def function="authorinfo(author, email_map=None)"><span class="author smile-username"><py:choose><py:when test="author"><py:with
+    vars="author = show_email_addresses and email_map and '@' not in author and email_map[author] or author">${
+      author and format_author(author) or 'anonymous'
+  }</py:with></py:when><py:otherwise>anonymous</py:otherwise></py:choose></span></py:def>
+
+    <div id="popup-ticket-comment" class="popup-form">
+        <p class="details">
+            <strong>
+                ${ticket.status}<py:if
+                  test="ticket.priority"> ${ticket.priority}</py:if><py:if
+                  test="ticket.type"> ${ticket.type}</py:if><py:if
+                  test="ticket.id"> #${ticket.id}</py:if>
+            </strong>
+            <py:if test="ticket.time_changed != ticket.time_created">
+                Modified ${dateinfo(ticket.time_changed)} ago ,
+            </py:if>
+            <py:if test="ticket.exists">
+                Opened ${dateinfo(ticket.time_created)} ago by <span class="searchable smile-user">${authorinfo(ticket.reporter)}</span>
+            </py:if>                                
+            <py:if test="not ticket.exists"><i>(ticket not yet created)</i></py:if>
+            <py:if test="ticket.component">
+                in <span class="searchable component">${ticket.component}</span>
+            </py:if>                                
+        </p>
+        <form>
+          <table border="1">
+            <tr>
+                <th>Comment:</th>
+                <td>
+                    <textarea name="comment"/>
+                </td>
+            </tr>
+          </table>
+
+          <div class="buttons">
+            <input value="Cancel" type="button" class="cancel"/>
+            <input value="Comment" type="submit" class="button-save" />
+          </div>
+
+          <input type="hidden" name="ticket" value="${ticket.id}"/>
+        </form>
+    </div>
+</body>
+</html>

@@ -7,7 +7,7 @@ from genshi.filters.transform import Transformer
 
 from trac.core import Component, implements, TracError
 from trac.config import Option, ListOption, ExtensionOption
-from trac.resource import ResourceNotFound
+from trac.resource import ResourceNotFound, Resource
 from trac.ticket.api import TicketSystem
 from trac.ticket.default_workflow import ConfigurableTicketWorkflow
 from trac.ticket.model import Ticket, Resolution, Type, Milestone
@@ -76,7 +76,7 @@ class DashboardModule(Component):
     milestone_summary_fields = ListOption('itteco-whiteboard-config', 'milestone_summary_fields', ['business_value', 'complexity'],
         doc="The comma separated list of the ticket fields for which totals would be calculated within milestone widget on whiteboard.")    
     
-    burndown_info_provider = ExtensionOption('itteco-whiteboard-config', 'burndown_info_povider',IBurndownInfoProvider,
+    burndown_info_provider = ExtensionOption('itteco-whiteboard-config', 'burndown_info_provider',IBurndownInfoProvider,
         'BuildBurndownInfoProvider',
         doc="The component implementing a burndown info provider interface.")
 
@@ -95,6 +95,7 @@ class DashboardModule(Component):
         ticket_config = self.env.config['itteco-whiteboard-tickets-config']
         if self._old_ticket_config!=ticket_config:
             default_fields = ticket_config.getlist('default_fields')
+            show_workflow = ticket_config.getbool('show_workflow')
 
             allowed_tkt_types = [ type.name for type in Type.select(self.env)]
             _ticket_type_config = {}
@@ -102,7 +103,13 @@ class DashboardModule(Component):
                 try:
                     tkt_type, prop = option.split('.',1)
                     if tkt_type in allowed_tkt_types:
-                        _ticket_type_config.setdefault(tkt_type, {'fields':default_fields})[prop] = ticket_config.get(option)
+                        _ticket_type_config.setdefault(
+                            tkt_type, 
+                            {
+                                'fields'   : default_fields,
+                                'workflow' : show_workflow
+                            }
+                        )[prop] = ticket_config.get(option)
                 except ValueError :
                     pass
 
@@ -116,7 +123,7 @@ class DashboardModule(Component):
             
             for type in allowed_tkt_types:
                 if type not in _ticket_type_config:
-                    _ticket_type_config[type]={'fields':default_fields}
+                    _ticket_type_config[type]={'fields':default_fields, 'workflow' : show_workflow}
                 if type in scope_types:
                     _ticket_type_config[type].update({
                         'weight_field_name':scope_element_field_name, \
@@ -126,7 +133,7 @@ class DashboardModule(Component):
                         'weight_field_name':work_element_field_name, \
                         'max_weight':work_element_max_weight})
                 _ticket_type_config[type]['fields']=self._get_ticket_fields(
-                    _ticket_type_config[type].get('fields'))
+                    _ticket_type_config[type].get('fields'), [])
                     
             self._ticket_type_config = _ticket_type_config
             self._old_ticket_config=ticket_config
@@ -210,7 +217,7 @@ class DashboardModule(Component):
         req.perm('ticket').require('TICKET_VIEW')
         
         board_type = req.args.get('board_type', 'team_tasks')
-        if board_type=='modify':
+        if board_type=='modify' and req.args.get('action'):
             self._perform_action(req)
         elif board_type == 'chart_settings':
             return self._chart_settings(req.args.get('milestone'))
@@ -219,13 +226,17 @@ class DashboardModule(Component):
             add_stylesheet(req, 'common/css/roadmap.css')
             add_stylesheet(req, 'itteco/css/common.css')
             add_stylesheet(req, 'itteco/css/jquery.ui/themes/flora/flora.dialog.css')
+            add_stylesheet(req, 'itteco/css/thickbox/thickbox.css')
+            
             add_script(req, 'itteco/js/jquery.ui/ui.core.js')
             add_script(req, 'itteco/js/jquery.ui/ui.dialog.js')
             add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
             add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
             add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
+            add_script(req, 'itteco/js/thickbox/thickbox.js')
             add_script(req, 'itteco/js/jquery.cookies.js')
             add_script(req, 'itteco/js/custom_select.js')
+            add_script(req, 'itteco//js/jquery.rpc.js')
             add_script(req, 'itteco/js/whiteboard.js')
 
             if board_type != req.args.get('board_type'):
@@ -311,9 +322,9 @@ class DashboardModule(Component):
             if not scope_item_found:
                 append_ticket(tkt_info, tkt_group)
         data['wb_items'] = wb_items
+        data['new_ticket_descriptor']= self.get_new_ticket_descriptor(
+                IttecoEvnSetup(self.env).work_element)
         
-        data['new_ticket_descriptor'] = self._get_new_ticket_descriptor(
-            IttecoEvnSetup(self.env).work_element)
         def mkey(x):
             f = self.scope_element_weight_field or 'id'
             key = x and x['id']
@@ -324,31 +335,6 @@ class DashboardModule(Component):
             return key
                 
         data['row_items_iterator']= sorted([s['scope_item'] for s in wb_items.values()], key=mkey)
-
-    def _get_new_ticket_descriptor(self, types):
-        ticket = Ticket(self.env)
-        ticket.id = 'new'
-        common_descriptor = {'ticket' : ticket}
-
-        if types:
-            for type in types:
-                common_descriptor.setdefault('fields',[]). \
-                    extend(self.ticket_type_config[type].get('fields',[]))
-            extra_types = self._get_ticket_fields(['summary','description','type'])
-            if extra_types:
-                ticket_type_field = extra_types[-1]
-                if ticket_type_field['type'] =='select':
-                    ticket_type_field['options'] = [o for o in ticket_type_field['options'] if o in types]
-            all_fields = extra_types + common_descriptor['fields']
-            unique_fields = []
-            found_names = []
-            for field in all_fields:
-                if field['name'] not in found_names:
-                    found_names.append(field['name'])
-                    unique_fields.append(field)
-            common_descriptor['fields'] = unique_fields
-        return common_descriptor
-
             
     def _add_storyboard_data(self, req, data):
         add_script(req, 'itteco/js/storyboard.js')
@@ -396,10 +382,10 @@ class DashboardModule(Component):
         for mil in milestone:
             if not wb_items.has_key(mil):
                 wb_items[mil] = {'fields':milestone_sum_fields}
-        data['wb_items'] = wb_items
-        data['new_ticket_descriptor'] = self._get_new_ticket_descriptor(
+        data['new_ticket_descriptor'] = self.get_new_ticket_descriptor(
             IttecoEvnSetup(self.env).scope_element)
 
+        data['wb_items'] = wb_items
     
     def _get_milestones_by_level(self, mils_tree, level_name, include_completed = False):
         mils =[]
@@ -468,6 +454,7 @@ class DashboardModule(Component):
         db = self.env.get_db_cnx()
         if action=='change_task':
             tkt_action = req.args.get('tkt_action')
+            comment = req.args.get('comment')
             TicketModule(self.env)._populate(req, ticket)
             data.update(dict([(k[6:],v) for k,v in req.args.items() if k.startswith('field_')]));
             if tkt_action:
@@ -486,10 +473,10 @@ class DashboardModule(Component):
                         data[key] = ticket[key]
                 data['status'] = ticket['status']
             if ticket.exists:
-                ticket.save_changes(get_reporter_id(req, 'author'), None, db=db)
+                ticket.save_changes(get_reporter_id(req, 'author'), comment, db=db)
             else:
                 ticket['status']='new'
-                ticket['reporter']=ticket['owner']
+                ticket['reporter']=get_reporter_id(req, 'author')
                 ticket.insert(db=db)
                 data['status']=ticket['status']
                 data['ticket']=ticket.id
@@ -515,7 +502,7 @@ class DashboardModule(Component):
 
         all_requested_fields = [ field \
             for tkt_type_cfg in self.ticket_type_config.values() \
-                for field in tkt_type_cfg.get('fields')]  + \
+                for field in tkt_type_cfg.get('fields',[])]  + \
             self._get_ticket_fields(['summary', 'description','milestone','resolution'])
 
         tkts_info = apply_ticket_permissions(
@@ -671,3 +658,38 @@ class DashboardModule(Component):
             stream |=Transformer('//*[@id="footer"]/p[@class="right"]').before(get_powered_by_sign())
       
         return  stream
+               
+    def get_new_ticket_descriptor(self, types, tkt_id=None):
+        if tkt_id and tkt_id!='new':
+            ticket = Ticket(self.env, tkt_id)
+            if not ticket.exists:
+                raise TracError(_(" Ticket with id '%(ticket)s does not exit", ticket= tkt_id))
+            types = [ticket['type']]
+        else:
+            ticket = Ticket(self.env)
+            ticket.id = 'new'
+        common_descriptor = {'ticket' : ticket}
+
+        if types:
+            for type in types:
+                cfg = self.ticket_type_config[type]
+                
+                common_descriptor.setdefault('fields',[]). \
+                    extend(cfg.get('fields',[]))
+                    
+                common_descriptor['workflow'] = common_descriptor.get('workflow',False) or cfg.get('workflow') or False
+                    
+            extra_types = self._get_ticket_fields(['summary','description','type'])
+            if extra_types:
+                ticket_type_field = extra_types[-1]
+                if ticket_type_field['type'] =='select':
+                    ticket_type_field['options'] = [o for o in ticket_type_field['options'] if o in types]
+            all_fields = extra_types + common_descriptor['fields']
+            unique_fields = []
+            found_names = []
+            for field in all_fields:
+                if field['name'] not in found_names:
+                    found_names.append(field['name'])
+                    unique_fields.append(field)
+            common_descriptor['fields'] = unique_fields
+        return common_descriptor

@@ -1,6 +1,7 @@
 import string
 import types
-
+import datetime
+from trac.util.datefmt import to_timestamp
 ##    json.py implements a JSON (http://json.org) reader and writer.
 ##    Copyright (C) 2005  Patrick D. Logan
 ##    Contact mailto:patrickdlogan@stardecisions.com
@@ -249,21 +250,21 @@ class JsonWriter(object):
     def _append(self, s):
         self._results.append(s)
 
-    def write(self, obj, escaped_forward_slash=False):
+    def write(self, obj, escaped_forward_slash=False, max_depth=-1):
         self._escaped_forward_slash = escaped_forward_slash
         self._results = []
-        self._write(obj)
+        self._write(obj, max_depth)
         return "".join(self._results)
 
-    def _write(self, obj):
+    def _write(self, obj, max_depth):
         ty = type(obj)
         if ty is types.DictType:
             n = len(obj)
             self._append("{")
             for k, v in obj.items():
-                self._write(k)
+                self._write(k, max_depth)
                 self._append(":")
-                self._write(v)
+                self._write(v, max_depth)
                 n = n - 1
                 if n > 0:
                     self._append(",")
@@ -272,26 +273,28 @@ class JsonWriter(object):
             n = len(obj)
             self._append("[")
             for item in obj:
-                self._write(item)
+                self._write(item, max_depth)
                 n = n - 1
                 if n > 0:
                     self._append(",")
             self._append("]")
         elif ty is types.StringType or ty is types.UnicodeType:
             self._append('"')
-	    obj = obj.replace('\\', r'\\')
+            obj = obj.replace('\\', r'\\')
             if self._escaped_forward_slash:
                 obj = obj.replace('/', r'\/')
-	    obj = obj.replace('"', r'\"')
-	    obj = obj.replace('\b', r'\b')
-	    obj = obj.replace('\f', r'\f')
-	    obj = obj.replace('\n', r'\n')
-	    obj = obj.replace('\r', r'\r')
-	    obj = obj.replace('\t', r'\t')
+    	    obj = obj.replace('"', r'\"')
+    	    obj = obj.replace('\b', r'\b')
+    	    obj = obj.replace('\f', r'\f')
+    	    obj = obj.replace('\n', r'\n')
+    	    obj = obj.replace('\r', r'\r')
+    	    obj = obj.replace('\t', r'\t')
             self._append(obj)
             self._append('"')
         elif ty is types.IntType or ty is types.LongType:
             self._append(str(obj))
+        elif ty is datetime.datetime:
+            self._append(str(to_timestamp(obj)))
         elif ty is types.FloatType:
             self._append("%f" % obj)
         elif obj is True:
@@ -300,12 +303,21 @@ class JsonWriter(object):
             self._append("false")
         elif obj is None:
             self._append("null")
+        elif max_depth!=0:
+            self._write(as_dict(obj), max_depth-1)
         else:
-            self._write(str(obj))
+            self._write(repr(obj), max_depth)
             #raise WriteException, "Cannot write in JSON: %s" % repr(obj)
 
-def write(obj, escaped_forward_slash=False):
-    return JsonWriter().write(obj, escaped_forward_slash)
+def as_dict(obj):
+    try:
+        d = vars(obj)
+        return d and dict([(k,v) for k,v in d.iteritems() if k and k[:1]!='_'])
+    except TypeError:
+        return repr(obj)
+
+def write(obj, escaped_forward_slash=False, max_depth=-1):
+    return JsonWriter().write(obj, escaped_forward_slash, max_depth)
 
 def read(s):
     return JsonReader().read(s)

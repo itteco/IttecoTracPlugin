@@ -4,7 +4,7 @@ from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
 from trac.config import Option, BoolOption, ListOption
-from trac.core import Component, Interface, implements, TracError
+from trac.core import Component, Interface, implements
 from trac.ticket.api import ITicketChangeListener
 from trac.ticket.model import Type
 from trac.util.compat import set
@@ -208,9 +208,6 @@ class BuildBurndownInfoProvider(AbstractBurndownInfoProvider):
 class DateBurndownInfoProvider(AbstractBurndownInfoProvider):
     """ The Sprint progress is calculated as soon as ticket is closed."""
     
-    final_statuses= ListOption('itteco-whiteboard-config', 'ticket_final_status', 
-        ['closed'], doc="List of the final statuses of tickets.")
-    
     def _get_job_done(self, mil_names, tkt_type=None, db=None):
         started_at = to_timestamp(datetime(tzinfo=localtz, \
             *(StructuredMilestone(self.env, mil_names[0]).started.timetuple()[:3])))
@@ -220,8 +217,9 @@ class DateBurndownInfoProvider(AbstractBurndownInfoProvider):
         base_sql = None
         params = list(mil_names)
         group_by = " GROUP BY t.id, t.type"
-        status_params = ("%s,"*len(self.final_statuses))[:-1]
-        params = self.final_statuses+ self.final_statuses + params
+        final_statuses = IttecoEvnSetup(self.env).final_statuses
+        status_params = ("%s,"*len(final_statuses))[:-1]
+        params = final_statuses+ final_statuses + params
         if self.count_burndown_on =='quantity':
             base_sql = """SELECT MAX(c.time), t.id, t.type, 1
                 FROM ticket t 

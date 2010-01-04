@@ -1,0 +1,41 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="layout.html" />
+  <xi:include href="macros.html" />
+ <head>
+  <title>Itteco Trac Calendar</title>
+	<SCRIPT>
+        $(document).ready(function(){
+            $('#calendarboard').eventCalendar(
+                {
+                    systemUrl:"${href.login('xmlrpc')}", 
+                    rootUrl: "${href()}", debug: true
+                }
+            );
+        });
+    </SCRIPT>
+ </head> 
+ <body>
+    <div id="calendar_panel" class="calendar-panel">
+        <div class="calendar-subpanel">
+            <span class="calendar-subpanel-head">My Calendars</span>
+            <ul id="my-calendars"></ul>
+        </div>
+        <div class="calendar-subpanel">
+            <span class="calendar-subpanel-head">My Shared Calendars</span>
+            <ul id="my-shared-calendars"></ul>
+        </div>
+        <div class="calendar-subpanel">
+            <span class="calendar-subpanel-head">Shared Calendars</span>
+            <ul id="shared-calendars"></ul>
+        </div>
+        <div class="calendar-subpanel">
+            <span class="calendar-subpanel-head">My Tickets</span>
+            <ul id="tickets"></ul>
+        </div>
+    </div>
+    <div id="calendarboard"></div>
+ </body>
+</html>

@@ -6,16 +6,20 @@
     <xi:include href="itteco_whiteboard_utils.html" />
               
     <div id="ticket_${obj.id}" py:if="obj.id=='new' or 'TICKET_VIEW' in perm('ticket', obj.id)"
-        py:with="editable=obj.id=='new' or 'TICKET_APPEND' in perm('ticket', obj.id) or 'TICKET_CHGPROP' in perm('ticket', obj.id) or False; fields = cfg.fields or obj.type and ticket_type_rendering_config[obj.type]['fields'] or []"
-        class="widget ${(cfg.draggable and editable) and 'draggable' or ''}" status="${obj.status}" idx="${obj.id}"
+        py:with="editable=obj.id=='new' or 'TICKET_APPEND' in perm('ticket', obj.id) or 'TICKET_CHGPROP' in perm('ticket', obj.id) or False; 
+            fields = cfg.fields or obj.type and ticket_type_rendering_config[obj.type]['fields'] or [];
+            blocks = blocks or ['summary', 'description', 'comment', 'views']"
+        class="widget ${(cfg.draggable and editable) and 'draggable' or ''}"
+        status="${obj.status}"
+        idx="${obj.id}"
         ticket_type="$obj.type">
         <div class="title drag_handle">
             <!-- ICON -->
             <div class="status-icon"></div>
-            <a href="${href.ticket(obj.id)}" py:if="obj.id">#${obj.id}</a><span>${obj.summary}</span>
+            <span class="ticket-pointer"><a href="${href.ticket(obj.id)}" py:if="obj.id" title="Edit #${obj.id} ${obj.summary}">#${obj.id}</a></span><span>${obj.summary}</span>
         </div>
         <div class="body">
-          <div class="block summary" py:if="obj.id">
+          <div class="block summary" py:if="obj.id and 'summary' in blocks">
               <div class='parameters'>
                 <div class='parameter' py:for="f in fields">
                   <div class='parameter_name'>${f.label}:</div>
@@ -26,7 +30,7 @@
                 </div>
               </div>
           </div>
-          <div class="block description hidden" py:if="obj.id">
+          <div class="block description hidden" py:if="obj.id and 'description' in blocks">
               <div class='parameters'>
                 <div class='parameter'>
                   <div class='parameter_value' field_name="description">${obj.description}</div>
@@ -34,37 +38,33 @@
               </div>
           </div>
 
-          
-          
-          <div class="block edit hidden" py:if="obj.id and editable">
+          <div class="block comment hidden" py:if="obj.id and editable and 'comment' in blocks">
             <form onsubmit="save_ticket(this); return false;" onreset="$('.custom_drop_down',this).triggerHandler('reset')">
               <div class='parameters'>
-                <div class='parameter' py:for="field in fields">${render_field(obj, field)}</div>
-                <div class='parameter'>Milestone:<br/> <xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></div>
-                <div class="parameter ${obj['status']!='closed' and 'hidden' or ''}" status='closed'>Resolution: <br/>
-                    <select name="field_resolution">
-                    <option py:for="option in resolutions" selected="${obj.resolution == option or None}">${option}</option>
-                    </select>
+                <div class='parameter'>Comment:<br/>
+                    <textarea name="comment"
+                      cols="40" rows="4"
+                      class="'wikitext'"></textarea>
                 </div>
               </div>
               <input type="hidden" name="ticket" value="${obj.id}"/>
               
               <ul class="edit-buttons">
                 <li><input type="button" onclick="$(this).parents('form').get(0).reset(); return change_ticket_view($(this).parents('.widget'),'summary');" value="Cancel" class="button-cancel" /></li>
-                <li><input value="Save" type="submit" class="button-submit" /></li>
+                <li><input value="Add" type="submit" class="button-submit" /></li>
               </ul>
             </form>
           </div>
           <!-- VIEWS UL/LI -->
-          <ul class="views" py:if="obj.id">
+          <ul class="views" py:if="obj.id and 'views' in blocks">
             <li class="view summary active_tab">
                 <a onclick="return change_ticket_view($(this).parents('.widget'),'summary');" href="#">Summary</a>
             </li>
             <li class="view description">
                 <a onclick="return change_ticket_view($(this).parents('.widget'),'description');" href="#">Description</a>
             </li>
-            <li class="view edit" py:if="editable">
-                <a onclick="return change_ticket_view($(this).parents('.widget'),'edit');" href="#">Edit</a>
+            <li class="view comment" py:if="editable">
+                <a onclick="return change_ticket_view($(this).parents('.widget'),'comment');" href="#">Comment</a>
             </li>
          </ul>
         </div>

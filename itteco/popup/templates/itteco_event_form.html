@@ -1,0 +1,247 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip=""> 
+    <div id="popup-event-editor" class="popup-form"
+         py:with="exists=event is not None">
+         <form>
+          <table border="1">
+            <tr class="parameter">
+                <th><label for="event_name">Name:</label></th>
+                <td><input id="event_name" type="text" name="name" value="${exists and event.name or None}" disabled="event and not event.own and 'disabled' or None"/></td>
+            </tr>
+            <tr class="parameter" py:if="not (event and event.id or None)">
+                <th><label for="event_calendar">Calendar:</label></th>
+                <td>
+                    <select id="event_calendar" name="calendar" disabled="event and not event.own and 'disabled' or None">
+                        <option py:for="cal in calendars" value="${cal.id}" selected="${event.calendar==cal.id or None}">${cal.name}</option>
+                    </select>
+                </td>
+            </tr>
+            <tr class="parameter">
+                <th><label for="event_time">Duration:</label></th>
+                <td>
+                    <input id="start" type="hidden" name="start" value="${event.start}"/>
+                    <input id="end"   type="hidden" name="end" value="${event.end}"/>
+                    
+                    <input id="dtstart" class="date-picker-target dates-item" type="text" name="dtstart" disabled="event and not event.own and 'disabled' or None"/>
+                    <input id="dtend" class="date-picker-target dates-item" type="text" name="dtend" disabled="event and not event.own and 'disabled' or None"/>
+                </td>
+            </tr>
+            <tr class="parameter">
+                <th><label for="event_description">Description:</label></th>
+                <td>
+                    <textarea id="event_description" name="description" disabled="event and not event.own and 'disabled' or None">${exists and event.description or None}</textarea>
+                </td>
+            </tr>
+            <tr class="parameter">
+                <th><label for="event_ticket">Ticket:</label></th>
+                <td>
+                    <select id="event_ticket" name="ticket" disabled="event and not event.own and 'disabled' or None">
+                        <option value=""></option>
+                        <option py:for="ticket in tickets" value="${ticket.ticketId}" selected="${exists and event.ticket==ticket.ticketId or None}">${ticket.summary}</option>
+                    </select>
+                </td>
+            </tr>
+            <tr class="parameter">
+                <th><label>Time information:</label></th>
+                <td>
+                    <input type="checkbox" id="timetrack" name="timetrack" checked="${exists and event.timetrack and 'checked' or None}" />
+                    <label for="event_timetrack">Enabled</label>
+                    <div id="time-track-container">
+                        <input type="checkbox" id="auto" name="auto" checked="${exists and event.auto and 'checked' or None}" />
+                        <label for="auto">Auto</label><br/>
+                        
+                        <label for="time">Time:</label>
+                        <input id="time" type="text" name="time" value="${exists and event.time or None}"/>
+                    </div>
+                </td>
+            </tr>
+          </table>
+
+          <div class="buttons">
+            <input type="button" value="Cancel" class="cancel"/>
+            <input value="Save" type="submit" class="button-save" />
+          </div>
+          
+          <input type="hidden" name="allday" value="${event.allDay}"/>          
+          <input type="hidden" name="calendar" value="${event.calendar}" py:if="event and event.id"/>
+          <input py:if="exists" type="hidden" name="id" value="${event.id}"/>
+        </form>
+        <script type="text/javascript">/*<![CDATA[*/
+        function eventFormManager(rootSel, sysUrl){ 
+            var rpc;
+            var parseDate = $.fullCalendar.parseISO8601;
+            function toISO8601(val){
+                if(typeof val=='undefined'){
+                    return val;
+                }
+                var cPos = val.search(':');
+
+                if (cPos != -1) {
+                    val = val.substr(0, cPos-3) + 'T'+ val.substr(cPos -2);
+                }
+                return val;
+            }
+            var ctx = {
+                initialStart : parseDate('${event.start}'),
+                initialEnd   : parseDate('${event.end}')
+            };
+            
+            console.log('event-form-ctx', ctx);
+            
+            var root = $(rootSel);
+
+            function toggleTimeTrackContainer(){
+                $('#time-track-container').toggle($('#timetrack:checked').length>0);
+            }
+            function toggleTimeTrackTime(){
+                var HOUR_S = 3600,
+                    MINUTE_S = 60;
+
+                if($('#auto:checked').length>0){
+                    var duration = $('#end').val()  - $('#start').val();
+                    var hours = Math.floor(duration / HOUR_S);
+                    var minutes = Math.floor((duration % HOUR_S) / MINUTE_S);
+                    if(minutes < 10){
+                        minutes = '0'+minutes;
+                    }
+                    $('#time').attr('disabled', 'disabled').val( hours+':'+minutes);
+                }else{
+                    $('#time').attr('disabled', '');
+                }
+            }
+            
+            function setupDateFields(start, end){
+                if(! (start || end)){
+                    return;
+                }
+                var shiftDown = true;
+                if(typeof start=='boolean'){
+                    start = new Date();
+                    start.setTime($('#start').val()*1000);
+                    shiftDown =false;
+                }
+                
+                if(typeof end == 'undefined'){
+                    end = new Date();
+                    end.setTime($('#end').val()*1000);
+                }
+                if(start>end && ctx){
+                    if (shiftDown){
+                        end = new Date();
+                        end.setTime(start.getTime()+ctx.duration);
+                    }else{
+                        start = new Date();
+                        start.setTime(end.getTime()-ctx.duration);
+                    }
+                }
+                $('#start').val(Math.round(start.getTime()/1000));
+                $('#end').val(Math.round(end.getTime()/1000));
+
+                var fmt = $.fullCalendar.formatDate;
+                $('#dtstart').val(fmt(start,'yyyy-MM-dd HH:mm'));                
+                $('#dtend').val(fmt(end,'yyyy-MM-dd HH:mm'));               
+                toggleTimeTrackTime();
+            }
+            
+            function setupCallback(root){
+                if(popup_context && popup_context.setup){
+                    popup_context.setup(root);
+                }
+            }
+            
+            function bindHandlers(){
+                $('form', root).submit(function(){
+                try{
+                    var vo = {}, arr = $(this).serializeArray();
+                    for(i in arr){
+                        vo[arr[i].name]=arr[i].value || '';
+                    }
+                    console.log('vo', vo);
+                    rpc.event.save(
+                        function(resp){
+                            console.log('resp',resp);
+                            popup_context.done(resp.result);
+                            return false;
+                        },
+                        vo['id'],
+                        vo['calendar'],
+                        vo['name'],
+                        vo['allday'],
+                        toISO8601(vo['dtstart']),
+                        toISO8601(vo['dtend']),
+                        vo['description'],
+                        vo['ticket'],
+                        vo['timetrack'],
+                        vo['auto'],
+                        vo['time'],
+                        new Date().getTimezoneOffset()
+                    );
+                }catch(e){console.log('e', e);}
+                    return false;
+                });
+                $('#timetrack').bind('change', {}, function(){
+                    toggleTimeTrackContainer();
+                });
+                $('#auto').bind('change', {}, function(){
+                    toggleTimeTrackTime();
+                });
+                
+                $('.cancel', root).click(function(){
+                    popup_context.cancel();
+                });
+                $('.date-picker-target', root).datepicker({
+                    dateFormat : 'yy-mm-dd',
+                    duration: '',
+                    showTime: true,
+                    stepMinutes: 5,
+                    stepHours: 1,
+                    time24h: true
+                 });
+                $('#dtstart', root).bind('change', {}, function(){
+                    var pointer= $(this);
+                    setTimeout(function(){
+                        setupDateFields(parseDate(toISO8601(pointer.val()), true));
+                    }, 200);
+                });
+                
+                $('#dtend', root).bind('change', {}, function(){
+                    var pointer= $(this);
+                    setTimeout(function(){
+                        setupDateFields(false, parseDate(toISO8601(pointer.val()), true));
+                    }, 200);
+                });
+
+            }
+                       
+            function setupRpc(url){
+                rpc = $.rpc(
+                   url,
+                   "xml",
+                   function(server) {
+                        if(!server || !server.system) {
+                            alert("Could not get the rpc object ..");
+                            return;
+                        }
+                    }
+                );
+
+            }
+            function init(root, ctx){
+                ctx.duration = Math.round(ctx.initialEnd.getTime())- Math.round(ctx.initialStart.getTime());
+                setupCallback(root);
+                setupDateFields(ctx.initialStart, ctx.initialEnd);
+                toggleTimeTrackContainer();
+                toggleTimeTrackTime();
+                bindHandlers();
+                setupRpc(sysUrl);
+            }
+            
+            init(root, ctx);
+        };
+        eventFormManager("#popup-event-editor", "${href.login('xmlrpc')}");
+        /*]]>*/</script>
+
+    </div>
+</html>

@@ -13,11 +13,12 @@ from trac.ticket.model import Type
 from trac.ticket.roadmap import MilestoneModule, RoadmapModule, TicketGroupStats, \
     DefaultTicketGroupStatsProvider, apply_ticket_permissions,get_ticket_stats,milestone_stats_data
 from trac.util.datefmt import get_date_format_hint, \
-    parse_date, utc, format_datetime, to_datetime, localtz
+    parse_date, utc, format_datetime, to_datetime, localtz, to_timestamp
 from trac.util.translation import _
 
 from trac.web.api import ITemplateStreamFilter
 from trac.web.chrome import Chrome, add_link, add_stylesheet, add_warning
+from trac.wiki.formatter import format_to
 
 from itteco.init import IttecoEvnSetup
 from itteco.scrum.burndown import IBurndownInfoProvider
@@ -314,6 +315,40 @@ class IttecoMilestoneModule(MilestoneModule):
         calculate_on = IttecoRoadmapModule(self.env).get_statistics_source(calc_on)
         data.update({'tkt_types': tkt_types,'calc_on': calculate_on})
         return 'itteco_milestone_view.html', data, None
+        
+    # ITimelineEventProvider methods
+    def get_timeline_events(self, req, start, stop, filters):
+        if 'milestone' in filters:
+            milestone_realm = Resource('milestone')
+            db = self.env.get_db_cnx()
+            cursor = db.cursor()
+            # TODO: creation and (later) modifications should also be reported
+            cursor.execute("SELECT started,name,description FROM milestone "
+                           "WHERE started>=%s AND started<=%s ",
+                           (to_timestamp(start), to_timestamp(stop)))
+            for started, name, description in cursor:
+                milestone = milestone_realm(id=name)
+                if 'MILESTONE_VIEW' in req.perm(milestone):
+                    yield('milestone', datetime.fromtimestamp(started, utc),
+                          '', (milestone, description, True)) 
+
+            for event in MilestoneModule.get_timeline_events(self, req, start, stop, filters):
+                yield event
+
+    def render_timeline_event(self, context, field, event):
+        started = False
+        if len(event[3])==3:
+            milestone, description, started = event[3]
+        else:
+            milestone, description = event[3]
+            
+        if field == 'url':
+            return context.href.milestone(milestone.id)
+        elif field == 'title':
+            return tag('Milestone ', tag.em(milestone.id), started and ' started' or ' completed')
+        elif field == 'description':
+            return format_to(self.env, None, context(resource=milestone),
+                             description)
         
 class IttecoRoadmapModule(RoadmapModule):
     _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])   

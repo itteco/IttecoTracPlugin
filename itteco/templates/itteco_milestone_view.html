@@ -6,7 +6,9 @@
       <form py:attrs="select('@*')">
         ${select("*|text()")}
         <xi:include href="itteco_roadmap_options.html" />
-        <input type="submit" value="Update" />
+	<div class="buttons">
+        	<input type="submit" value="Update" />
+	</div>
       </form>
       <script type="text/javascript">
           jQuery(document).ready(function ($) { $("#by").removeAttr("onchange"); });

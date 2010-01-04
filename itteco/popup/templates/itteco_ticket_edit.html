@@ -1,0 +1,170 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="itteco_whiteboard_utils.html" />
+<head>
+<script type="text/javascript">/*<![CDATA[*/
+    function ticketFormManager(rootSel, sysUrl){ 
+        var rpc;            
+        var root = $(rootSel);
+        
+        function log(){
+            if(console && console.log){
+                console.log.apply(console, arguments);
+            }
+        }
+        function setupCallback(root){
+            if(window.popup_context && window.popup_context.setup){
+                popup_context.setup(root);
+            }
+        }
+        
+        function createTicketAttributes(form){
+            var attrs = {}, arr = $(form).serializeArray();
+            
+            for(i in arr){
+                var field = arr[i];
+                if(field.name.indexOf('field_')==0){
+                    attrs[field.name.substr(6)] = field.value;
+                }
+            }
+            
+            return attrs;
+        }
+
+        function notify(vo){
+            log('nofity-parent',window.popup_context, vo);
+            if(window.popup_context && window.popup_context.done){
+                window.popup_context.done(vo);
+            }
+        }
+        
+        function handleTicketResp(resp){
+            var tkt = resp.result[3];
+            tkt.id = resp.result[0];
+            notify(tkt);
+        }
+
+        function updateTicket(id, attrs){
+            rpc.ticket.update(
+                handleTicketResp,
+                Number(id),
+                '',
+                attrs
+            );
+        }
+
+        function createTicket(attrs){
+            rpc.ticket.create(
+                function(resp){
+                    var id = resp.result;
+                    $(":input[name='ticket']", root).val(id),
+                    rpc.ticket.get(
+                        handleTicketResp,
+                        id
+                    );                    
+                },                
+                '',//summary
+                '',//description
+                attrs
+            );
+        }
+
+        function save(id, attrs){
+            if(id==''){
+                createTicket(attrs);
+            }else{
+                updateTicket(id, attrs);
+            }
+        }
+        function bindHandlers(){
+            log('bindHandlers', $('form', root));
+            $('form', root).submit(function(){
+                try{
+                    save(
+                        $(":input[name='ticket']", root).val(),
+                        createTicketAttributes(this)
+                    );
+                }catch(e){log('action-failed with exception', e);}
+                return false;
+            });
+            
+            $('.cancel', root).click(function(){
+                if(window.popup_context && window.popup_context.cancel){
+                    window.popup_context.cancel();
+                }
+            });
+        }
+                   
+        function setupRpc(url){
+            rpc = $.rpc(
+               url,
+               "xml",
+               function(server) {
+                    if(!server || !server.system) {
+                        alert("Could not get the rpc object ..");
+                        return;
+                    }
+                }
+            );
+        }
+        function init(){
+            setupCallback(root);
+            bindHandlers();
+            setupRpc(sysUrl);
+        }
+        
+        init();
+    };
+/*]]>*/</script>
+</head>
+<body>
+    <div id="popup-ticket-editor" class="popup-form"
+         py:with="obj=new_ticket_descriptor['ticket']; cfg=new_ticket_descriptor">
+        <xi:include href="itteco_whiteboard_utils.html" />
+        <form onreset="$('.custom_drop_down',this).triggerHandler('reset')"
+            py:with="editable=obj.id=='new' or 'TICKET_APPEND' in perm('ticket', obj.id) or 'TICKET_CHGPROP' in perm('ticket', obj.id) or False; 
+            fields = cfg.fields or obj.type and ticket_type_rendering_config[obj.type]['fields'] or [];">
+          <table border="1">
+            <tr py:for="field in fields">
+                <th><label>${field['label']}</label></th>
+                <td>${render_field_editor(obj, field)}</td>
+            </tr>
+            <tr>
+                <th><label>Milestone:</label></th>
+                <td><xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></td>
+            </tr>
+            <tr py:if="obj and obj.id!='new' and cfg.workflow">
+                <th>Actions:</th>
+                <td>
+                    <div py:for="key, label, controls, hints in action_controls">
+                      <input type="radio" id="action_$key" name="field_action" value="$key" checked="${action == key or None}" />
+                        <label for="action_$key">$label</label>
+                        $controls
+                        <span class="hint" py:for="hint in hints">$hint</span>
+                    </div>
+                </td>
+            </tr>
+          </table>
+
+          <div class="buttons">
+            <input value="Cancel" type="button" class="cancel"/>
+            <input value="Save" type="submit" class="button-save" />
+            <input value="Full editor" type="button" onclick="document.location= '${obj.id=='new' and href.newticket() or href.ticket(obj.id)}'" class="full-editor goto-panel"/>
+          </div>
+
+          <input type="hidden" name="ticket" value="${obj.id!='new' and obj.id or None}"/>      
+        </form>
+        <script type="text/javascript">/*<![CDATA[*/
+        if(window.popup_context){
+            ticketFormManager("#popup-ticket-editor", "${href.login('xmlrpc')}");
+        }else{
+            jQuery(document).ready(function(){
+                ticketFormManager("#popup-ticket-editor", "${href.login('xmlrpc')}");
+            });
+        }
+        /*]]>*/</script>
+    </div>
+</body>
+</html>

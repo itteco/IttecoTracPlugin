@@ -1,4 +1,17 @@
 var draggable_options ={helper: 'clone', handle: '.drag_handle', opacity: 0.8, 'start' : function(e, ui){ui.helper.css('width',this.offsetWidth+'px');}};
+var popup_context = {};
+var rpc;
+
+jQuery.fn.outerHTML = function() {
+	return $('<div>').append(this.eq(0).clone()).html();
+};	
+
+function log(){
+    if(console && console.log){
+        console.log.apply(console, arguments);
+    }
+}
+
 function WBContext(){
     this.filter = {field: new Object(), attr: new Object()};
     this.cpVisible = false;
@@ -65,7 +78,7 @@ function WBContext(){
 var wbContext = new WBContext();
 
 update_cell = function(cell, ignore_id){
-    var row_stat = cell.siblings('.group_holder');
+    var row_stat = cell.siblings().andSelf().filter('.group_holder');
     var group_filter ="[status='"+ cell.attr('status')+"']";
     
     var selector = '.widget';
@@ -153,7 +166,14 @@ colorizeWidget=function(widget){
             widget.css('background-color',c);
         }
         var icon = $(".status-icon", widget);
-        icon.css('background-color',tkt_type_cfg['icon_bg_color']||'#0F0');
+        var iconColor = tkt_type_cfg['icon_bg_color']||'#0F0';
+        if(stats_status_to_group){
+            var g_name = stats_status_to_group[widget.attr('status')];
+            if(g_name && stats_config[g_name] && stats_config[g_name]['overall_completion']){
+                iconColor = '#CCC';//grayout completed story
+            }
+        }
+        icon.css('background-color',iconColor);
         icon.text(tkt_type_cfg['icon_text']);
     }
 }    
@@ -293,6 +313,7 @@ teamMemberPrepare=function(ticket, member) {
 }
 
 defaultPostprocess = function(ticket, data){
+    console.log('defaultPostprocess', ticket, data);
     if (data.result=='done'){
         var mil = data.milestone;
         var parent = ticket.parent();
@@ -317,7 +338,12 @@ defaultPostprocess = function(ticket, data){
 }
 save_ticket_changes = function(ticket, send_data, postprocess){
     postprocess = (typeof(postprocess)=='function') ? postprocess : defaultPostprocess;
-    $.getJSON(actionUrl, send_data, function(data){ postprocess(ticket, data);});
+    if(typeof(send_data)=='object'){
+        send_data['action'] = 'change_task';
+    }else{
+        send_data='action=change_task&'+send_data;
+    }
+    $.getJSON(window.urls.action, send_data, function(data){ postprocess(ticket, data);});
 }
 getActionToPerform = function(group_name, ticket_status){
     if (typeof(groups_config) == 'undefined') return;
@@ -331,6 +357,7 @@ getActionToPerform = function(group_name, ticket_status){
 }    
 
 acceptTicket = function(draggable){
+    return true;
     if ($("[idx='"+draggable.attr('idx')+"']", this).length>0 || !draggable.hasClass('widget')){
         return false;
     }
@@ -442,6 +469,17 @@ setupAjax = function(){
     $('#wb-error-panel').ajaxError(function(event, request, settings){
         $(this).append("<li>Error performing action: " + settings.url + "</li>");
     });
+    
+    rpc = $.rpc(
+       window.urls.rpc,
+       "xml",
+       function(server) {
+            if(!server || !server.system) {
+                alert("Could not get the rpc object ..");
+                return;
+            }
+        }
+    );
 }
 loadContext = function(){
     wbContext.load();
@@ -463,70 +501,192 @@ setupTicketCreation = function(){
         $(".summary .parameter:has([field_name='summary'],[field_name='description'], [field_name='type'])", tkt_prototype).remove();
         $(".edit .parameter:has([name='field_summary'],[name='field_description'], [name='field_type'])", tkt_prototype).remove();
     }
-    function setupTicketCreationForm(){
-        var new_tkt_link = $('.title a', template);
-        var href = new_tkt_link.attr('href');
-        new_tkt_link.attr('href', href.substring(0,href.indexOf('/',1))+'/newticket');
-        var found_milestone;
-        for (mil in window.current_milestone){found_milestone = mil;break;}
-        $("[name='field_milestone']", template).val(found_milestone);
-        change_ticket_view(template,'edit');
-        $(':button', template).attr('onclick','').bind('click', function(){$(this).parents('form').triggerHandler('reset');template.dialog('destroy');});
-        $('.views, .hidden', template).remove();
-        $('form', template).attr('onsubmit','').append('<input type="hidden" name="new_story"/>').bind(
-            'submit',function(){
-                var targetObj= $(':hidden[name="new_story"]', this);
-                var targetVal = targetObj.val();
-                var widget=$('#new_ticket_prototype .widget').clone(). 
-                    attr('ticket_type',$(':input[name="field_type"]',this).val()). 
-                    appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
-                $('[field_name="description"]', widget).text($(':input[name="field_description"]',this).val());
-                if(isNaN(parseInt(targetVal))){
-                    targetObj.val('');
-                }
-                widget.addClass('draggable').draggable(draggable_options);
-                save_ticket_changes(widget,$(this).serialize(), postprocessTicketCreation);
-                template.dialog('destroy');
-                return false;});
-    }
 
-    function showDialog(){
-        template.css('display','block').dialog({
-            modal:true,
-            height:window.clientHeight*0.9+30,
-            width:400,
-            overlay:{'opacity':'0.5', 'background-color':'#CACACA'}, 
-            close: function(event, ui){$(this).dialog('destroy');}});    
-    }
     function postprocessTicketCreation(ticket, data){
         defaultPostprocess(ticket, data);
         if(data.result=='done'){
             var head = $('.title a', ticket);
             var href = head.attr('href');
-            var tkt_id =data['ticket'];
-            ticket.attr('idx', tkt_id).attr('id', 'ticket_'+tkt_id);
-            href = href.substring(0,href.length-3)+tkt_id;
+            var tkt_id =data['id'];
+            ticket.attr({'idx':tkt_id, 'id': 'ticket_'+tkt_id});
+            var path = href;
+            var query = "";
+            if(href.indexOf('?')>0){
+                path = href.substring(0, href.indexOf('?'));
+                query = href.substring(href.indexOf('?')+1);
+            }
+            href = path.substring(0,path.length-3)+tkt_id + (query!="" ? '?'+query : "") ;
             head.attr('href',href).text('#'+tkt_id);
             head.next().text(data['summary']);
             $(':hidden[name="ticket"]', ticket).val(tkt_id);
+            ticket.draggable(draggable_options);
+            tb_init(head);
         }
     }
 
     function setupButtonsForTicketCreation(){
-        var link =$("<a class='append_button' href='#'>Add Ticket</a>").bind('click', function(){
+        function cancel(){
+            tb_remove();
+            return false;
+        }
+
+        var link =$('<a class="append_button" href="'+window.urls.popup+'tickets?height=570&width=520" title="Create Ticket">Add Ticket</a>').bind('click', function(){
             var o = $(this);
-            $(':hidden[name="new_story"]', template).val(o.parents(".group_holder").attr('idx'));
-            showDialog();
+            window.popup_context = {
+                cancel : cancel,
+                setup  :function (root){
+                    var found_milestone;
+                    for (mil in window.current_milestone){found_milestone = mil;break;}
+                    $("[name='field_milestone']", root).val(found_milestone);
+                },
+                done : function(tkt){
+                    log('popup reports that action was done', tkt);
+                    tkt.result = 'done';//hack to be removed
+                        
+                    var targetVal = popup_context['new_story'];
+                    if(isNaN(parseInt(targetVal))){
+                        targetVal='';
+                    }
+                    var widget=$('#new_ticket_prototype .widget').clone(). 
+                        attr('ticket_type',tkt.type). 
+                        appendTo($('#whiteboard_table tbody tr[idx="'+ targetVal+'"] > td[status]:first'));
+                    $('.progress', widget).parent().remove();
+                    $('[field_name="description"]', widget).text(tkt.description);
+                    
+                    log('before enabling drag and drop', widget);
+                    widget.addClass('draggable').draggable(draggable_options);
+                    rpc.ticketconfig.trace(
+                        function(resp){
+                            postprocessTicketCreation(widget, tkt);
+                        },
+                        tkt.id,
+                        targetVal
+                    )
+                    return cancel();
+                }
+            }
+            popup_context['new_story']=o.parents(".group_holder").attr('idx');
             return false;
         });
         $($("<li/>").append(link)).appendTo($('#whiteboard_table tbody th .views'));
+        tb_init('a.append_button');
     }
     if(template.length>0){
         setupTicketPrototype();
-        setupTicketCreationForm();
         setupButtonsForTicketCreation();
     }
 }
+
+function setupPopupEditor(){
+    var pointers = $('a.ticket_pointer');
+
+    if(pointers.length>0){
+        pointers.click(function(){
+            var widget = $(this).parents('.widget');
+            window.popup_context = {
+                cancel : cancel,
+                setup  :function (root){},
+                done : function(tkt){
+                    log('popup reports that action was done', tkt);
+                    tkt.result = 'done';//hack to be removed
+                    defaultPostprocess(widget, tkt);                    
+                    return cancel();
+                }
+            }
+        });
+        tb_init(pointers);
+    }
+}
+function showPopup(ticket, popupName){
+    function cancel(){
+        tb_remove();
+        return false;
+    }
+
+    var widget = $('#ticket_'+ticket);
+    if(widget.length>0){
+        window.popup_context = {
+            cancel : cancel,
+            setup  :function (root){},
+            done : function(tkt){
+                log('popup reports that action was done', tkt);
+                tkt.result = 'done';//hack to be removed
+                defaultPostprocess(widget, tkt);                    
+                return cancel();
+            }
+        }
+        tb_show('',window.urls.popup+popupName+'/'+ticket+'?height=570&width=520');
+    }
+}
+
+function showQuickEditor(ticket){
+    showPopup(ticket,'tickets');
+}
+function showCommentEditor(ticket){
+    showPopup(ticket,'comment');
+}
+function showFullEditor(ticket){
+    document.location = window.urls.base+'/ticket/'+ticket;
+}
+
+
+
+
+function ContextMenu() {
+    jQuery('body').append('<div id="inline-menu"><div id="inline-menu-body"></div></div>');
+    
+	var inlineMenu 		= jQuery('#inline-menu');
+	var inlineMenuBody 	= jQuery('#inline-menu-body');
+	// show menu
+	function showInlineMenu(element) {
+        log('element', element, jQuery(element));
+		offset = jQuery(element).offset();
+		inlineMenu.css('left',offset.left);
+		inlineMenu.css('top',offset.top);
+		menuItems = getInlineMenu(element);
+		if (menuItems) {
+			inlineMenuBody.html('<div>' + jQuery(element).outerHTML() + '</div>' + menuItems);
+			inlineMenu.show();	
+		}
+	}
+	
+	// get menu items
+	function getInlineMenu(element) {
+		var ticket = jQuery(element).text().substr(1);
+		if (jQuery(element).hasClass('ticket-pointer')) {
+			menu = '<ul>';
+			menu += '<li class="inline-menu-item-ticket-quick-editor"><a href="#quickeditor" onclick="showQuickEditor(\'' + ticket + '\')">Quick Editor</a></li>';
+            menu += '<li class="inline-menu-item-ticket-comment"><a href="#comment" onclick="showCommentEditor(\'' + ticket + '\')">Comment</a></li>';
+			menu += '<li class="inline-menu-item-ticket-full-editor"><a href="#fulleditor" onclick="showFullEditor(\'' + ticket + '\')">Full Editor</a></li>';
+			menu += '</ul>';
+		}
+		return menu;
+	}
+
+    function attach(obj){
+        $(obj).mouseover(
+            function() {
+                showInlineMenu(this);
+            }								
+        );
+    }
+    
+	// events
+    this.attachTo = attach;
+    
+    attach(jQuery('.ticket-pointer'));
+    
+	jQuery(inlineMenu).hover(
+		function(event) {},
+		function(event) {
+			jQuery(inlineMenu).hide();
+		}
+	);
+}
+
+var contextMenu ;
+
+
 $(document).ready(function(){
     setupAjax();
     bindEventHandlers();
@@ -535,5 +695,7 @@ $(document).ready(function(){
     colorizeWidgets();
     modifyMilestonesTree();
     setupTicketCreation();
+    contextMenu = new ContextMenu()
+    //setupPopupEditor();
     loadContext();
 });

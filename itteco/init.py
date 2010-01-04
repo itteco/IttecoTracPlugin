@@ -48,6 +48,10 @@ class IttecoEvnSetup(Component):
 
     work_element = property(lambda self: self._get_work_elements())
     
+    final_statuses= ListOption('itteco-whiteboard-config', 'ticket_final_status', 
+        ['closed'], doc="List of the final statuses of tickets.")
+
+    
     change_listeners = ExtensionPoint(IMilestoneChangeListener)
     
     def _get_work_elements(self):

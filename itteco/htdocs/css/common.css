@@ -398,6 +398,7 @@ table.whiteboard_table tbody tr.odd td {
 	margin: 8px 0 5px 0;
 	border: 1px solid #b3b38d !important;
 	width: 80%;
+	float: left;
 }
 .widget .progress td {
 	padding: 6px !important;
@@ -868,3 +869,39 @@ table.whiteboard_table tbody tr.odd td {
 }
 
 #new_ticket_template{ display:none;}
+
+#inline-menu {
+	position: absolute;
+	display: none;
+	margin: -3px 0 0 -3px;
+	-moz-box-shadow: rgba(0,0,0,.3) 0 2px 3px;
+	-webkit-box-shadow: rgba(0,0,0,.3) 0 2px 3px;
+}
+#inline-menu-body {
+	background-color: white;
+	border: 1px solid #cedfed;
+	min-width: 100px;
+	--font-size: 1.2em;	
+}
+#inline-menu-body div {
+	padding: 2px;
+	padding-right: 6px;
+	margin-bottom: 2px;
+}
+#inline-menu-body li {
+	font-size: 1em;
+	text-transform: lowercase;
+}
+#inline-menu-body ul {
+	list-style: none;
+}
+#inline-menu-body ul a {
+	padding: 2px 6px 3px 16px;
+	display: block;
+	color: gray;
+}
+#inline-menu-body ul a:hover {
+	text-decoration: none;
+	background: #e3f1f9;
+	color: #1f66b8;
+}
