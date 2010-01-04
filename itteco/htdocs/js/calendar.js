@@ -206,7 +206,7 @@
                     calendar.name,
                     calendar.theme,
                     calendar.type,
-                    calendar.ref
+                    calendar.ref || 0
                 );
             }
 
