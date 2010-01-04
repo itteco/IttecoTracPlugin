@@ -9,8 +9,8 @@
         var root = $(rootSel);
         
         function log(){
-            if(console && console.log){
-                console.log.apply(console, arguments);
+            if(typeof console !='undefined' && console.log){
+                console.log.apply("", arguments);
             }
         }
         function setupCallback(root){

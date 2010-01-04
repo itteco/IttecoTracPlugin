@@ -3,17 +3,17 @@
       xmlns:py="http://genshi.edgewall.org/"
       xmlns:xi="http://www.w3.org/2001/XInclude" py:strip=""> 
     <div id="popup-event-editor" class="popup-form"
-         py:with="exists=event is not None">
+         py:with="exists=event and event.id or None; edit_disabled = event and not event.own and 'disabled' or None">
          <form>
           <table border="1">
             <tr class="parameter">
                 <th><label for="event_name">Name:</label></th>
-                <td><input id="event_name" type="text" name="name" value="${exists and event.name or None}" disabled="event and not event.own and 'disabled' or None"/></td>
+                <td><input id="event_name" type="text" name="name" value="${exists and event.name or None}" disabled="${edit_disabled}"/></td>
             </tr>
             <tr class="parameter" py:if="not (event and event.id or None)">
                 <th><label for="event_calendar">Calendar:</label></th>
                 <td>
-                    <select id="event_calendar" name="calendar" disabled="event and not event.own and 'disabled' or None">
+                    <select id="event_calendar" name="calendar" disabled="${edit_disabled}">
                         <option py:for="cal in calendars" value="${cal.id}" selected="${event.calendar==cal.id or None}">${cal.name}</option>
                     </select>
                 </td>
@@ -24,20 +24,20 @@
                     <input id="start" type="hidden" name="start" value="${event.start}"/>
                     <input id="end"   type="hidden" name="end" value="${event.end}"/>
                     
-                    <input id="dtstart" class="date-picker-target dates-item" type="text" name="dtstart" disabled="event and not event.own and 'disabled' or None"/>
-                    <input id="dtend" class="date-picker-target dates-item" type="text" name="dtend" disabled="event and not event.own and 'disabled' or None"/>
+                    <input id="dtstart" class="date-picker-target dates-item" type="text" name="dtstart" disabled="${edit_disabled}"/>
+                    <input id="dtend" class="date-picker-target dates-item" type="text" name="dtend" disabled="${edit_disabled}"/>
                 </td>
             </tr>
             <tr class="parameter">
                 <th><label for="event_description">Description:</label></th>
                 <td>
-                    <textarea id="event_description" name="description" disabled="event and not event.own and 'disabled' or None">${exists and event.description or None}</textarea>
+                    <textarea id="event_description" name="description" disabled="${edit_disabled}">${exists and event.description or None}</textarea>
                 </td>
             </tr>
             <tr class="parameter">
                 <th><label for="event_ticket">Ticket:</label></th>
                 <td>
-                    <select id="event_ticket" name="ticket" disabled="event and not event.own and 'disabled' or None">
+                    <select id="event_ticket" name="ticket" disabled="${edit_disabled}">
                         <option value=""></option>
                         <option py:for="ticket in tickets" value="${ticket.ticketId}" selected="${exists and event.ticket==ticket.ticketId or None}">${ticket.summary}</option>
                     </select>
@@ -87,9 +87,7 @@
                 initialStart : parseDate('${event.start}'),
                 initialEnd   : parseDate('${event.end}')
             };
-            
-            console.log('event-form-ctx', ctx);
-            
+                      
             var root = $(rootSel);
 
             function toggleTimeTrackContainer(){
@@ -158,10 +156,8 @@
                     for(i in arr){
                         vo[arr[i].name]=arr[i].value || '';
                     }
-                    console.log('vo', vo);
                     rpc.event.save(
                         function(resp){
-                            console.log('resp',resp);
                             popup_context.done(resp.result);
                             return false;
                         },
@@ -178,7 +174,7 @@
                         vo['time'],
                         new Date().getTimezoneOffset()
                     );
-                }catch(e){console.log('e', e);}
+                }catch(e){}
                     return false;
                 });
                 $('#timetrack').bind('change', {}, function(){

@@ -31,7 +31,7 @@ def cal_as_dict(cal, username):
     }
     return c
     
-def event_as_dict(event):
+def event_as_dict(event, username=None):
     tt = event.time_track
     time = tt and tt.exists and tt.time or (event.dtend - event.dtstart).seconds/60
     
@@ -41,6 +41,7 @@ def event_as_dict(event):
         'end'        : format_datetime(event.dtend,'iso8601', utc),
         'allDay'     : event.allday==1,
         'name'       : event.title, 
+        'own'        : username and event.owner==username or None,
         'calendar'   : event.calendar, 
         'description': event.description,
         'ticket'     : event.ticket,

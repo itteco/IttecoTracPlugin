@@ -519,7 +519,7 @@
                         tb_show(null, settings.rootUrl+'/popup/events/?allDay='+allDay+'&calendar='+calId+
                             '&date='+toTimestamp(dayDate)+
                             '&height=500&width=600', null);
-                    },
+                    },                    
                     eventClick: function(calEvent, jsEvent, view){
                         setupPopupContext();
                         tb_show(null, settings.rootUrl+'/popup/events/'+calEvent.id+'?height=500&width=600', null);        
@@ -530,6 +530,11 @@
                     }, 
                     eventResize: function(calEvent, dayDelta, minuteDelta, revertFunc, jsEvent, ui, view){
                         serializeAndSaveEvent(calEvent);           
+                    },
+                    viewDisplay : function(view){
+                        if($.isFunction(settings.renderCallback)){
+                            settings.renderCallback();
+                        }
                     }
                 });   
             }
@@ -562,12 +567,6 @@
             
             ctx.reportReady(this);        
         }
-               
-        function fixPositioning(){
-            var c = $('.fc-content', $(settings.target));
-            //c.css('top', -150);
-        }
-        fixPositioning();
         
         function testDraggable(){
             //test of the dragging tickets

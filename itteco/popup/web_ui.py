@@ -54,6 +54,7 @@ class PopupModule(Component):
         cal_id = event_id and event.calendar or req.args.get('calendar')
         if not event_id:
             event.calendar = cal_id
+            event.owner=user
             event.allday = req.args.get('allDay')=='true' and 1 or 0;
             getdate= lambda x: to_datetime(long(req.args[x]), utc)
             event.dtstart = getdate('date')
@@ -62,7 +63,7 @@ class PopupModule(Component):
             tt = TimeTrack(self.env, event.id, user)
             event.time_track = tt
         data = {
-            'event'     : event and event_as_dict(event) or None,
+            'event'     : event and event_as_dict(event, user) or None,
             'tickets'   : self._get_active_tickets(user),
             'calendars' : 
                 [cal_as_dict(cal, user) for cal in Calendar.select(self.env, owner=user)
