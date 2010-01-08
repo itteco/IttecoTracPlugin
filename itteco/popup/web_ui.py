@@ -52,18 +52,26 @@ class PopupModule(Component):
         event_id = req.args.get('obj_id') or None
         event = Event(self.env, event_id)
         cal_id = event_id and event.calendar or req.args.get('calendar')
+        own = True
         if not event_id:
             event.calendar = cal_id
-            event.owner=user
-            event.allday = req.args.get('allDay')=='true' and 1 or 0;
+            event.allday = req.args.get('allDay')=='true' and 1 or 0
+            ticket = req.args.get('ticket')
+            ticket = ticket and Ticket(self.env, int(ticket)) or None
+            if ticket and ticket.exists and 'TICKET_VIEW' in req.perm(ticket.resource):
+                event.ticket = ticket.id
+                event.title = ticket['summary']
+                event.time_track = TimeTrack(self.env)
             getdate= lambda x: to_datetime(long(req.args[x]), utc)
             event.dtstart = getdate('date')
-            event.dtend = event.dtstart + timedelta(minutes=30)
+            event.dtend = event.dtstart + timedelta(minutes=60)
         else:
+            cal = Calendar(self.env, event.calendar)
+            own = cal.owner==user
             tt = TimeTrack(self.env, event.id, user)
             event.time_track = tt
         data = {
-            'event'     : event and event_as_dict(event, user) or None,
+            'event'     : event and event_as_dict(event, own) or None,
             'tickets'   : self._get_active_tickets(user),
             'calendars' : 
                 [cal_as_dict(cal, user) for cal in Calendar.select(self.env, owner=user)
@@ -79,7 +87,7 @@ class PopupModule(Component):
             }
             
         final_statuses = [status for status in IttecoEvnSetup(self.env).final_statuses]
-        
+
         db = self.env.get_db_cnx()
         cursor = db.cursor()
         cursor.execute("""

@@ -8,7 +8,7 @@
           <table border="1">
             <tr class="parameter">
                 <th><label for="event_name">Name:</label></th>
-                <td><input id="event_name" type="text" name="name" value="${exists and event.name or None}" disabled="${edit_disabled}"/></td>
+                <td><input id="event_name" type="text" name="name" value="${event and event.name or None}" disabled="${edit_disabled}"/></td>
             </tr>
             <tr class="parameter" py:if="not (event and event.id or None)">
                 <th><label for="event_calendar">Calendar:</label></th>
@@ -21,17 +21,19 @@
             <tr class="parameter">
                 <th><label for="event_time">Duration:</label></th>
                 <td>
+                    <input type="checkbox" id="allday" name="allday" checked="${event and event.allDay and 'checked' or None}" />
+                    <label for="allday">All Day</label><br/>
                     <input id="start" type="hidden" name="start" value="${event.start}"/>
                     <input id="end"   type="hidden" name="end" value="${event.end}"/>
                     
-                    <input id="dtstart" class="date-picker-target dates-item" type="text" name="dtstart" disabled="${edit_disabled}"/>
-                    <input id="dtend" class="date-picker-target dates-item" type="text" name="dtend" disabled="${edit_disabled}"/>
+                    <input id="dtstart" class="date-picker-target dates-item-date" type="text" name="dtstart" disabled="${edit_disabled}"/>
+                    <input id="dtend" class="date-picker-target dates-item-date" type="text" name="dtend" disabled="${edit_disabled}"/>
                 </td>
             </tr>
             <tr class="parameter">
                 <th><label for="event_description">Description:</label></th>
                 <td>
-                    <textarea id="event_description" name="description" disabled="${edit_disabled}">${exists and event.description or None}</textarea>
+                    <textarea id="event_description" name="description" disabled="${edit_disabled}">${event and event.description or None}</textarea>
                 </td>
             </tr>
             <tr class="parameter">
@@ -39,21 +41,21 @@
                 <td>
                     <select id="event_ticket" name="ticket" disabled="${edit_disabled}">
                         <option value=""></option>
-                        <option py:for="ticket in tickets" value="${ticket.ticketId}" selected="${exists and event.ticket==ticket.ticketId or None}">${ticket.summary}</option>
+                        <option py:for="ticket in tickets" value="${ticket.ticketId}" selected="${event and event.ticket==ticket.ticketId or None}">${ticket.summary}</option>
                     </select>
                 </td>
             </tr>
             <tr class="parameter">
                 <th><label>Time information:</label></th>
                 <td>
-                    <input type="checkbox" id="timetrack" name="timetrack" checked="${exists and event.timetrack and 'checked' or None}" />
+                    <input type="checkbox" id="timetrack" name="timetrack" checked="${event and event.timetrack and 'checked' or None}" />
                     <label for="event_timetrack">Enabled</label>
                     <div id="time-track-container">
-                        <input type="checkbox" id="auto" name="auto" checked="${exists and event.auto and 'checked' or None}" />
+                        <input type="checkbox" id="auto" name="auto" checked="${event and event.auto and 'checked' or None}" />
                         <label for="auto">Auto</label><br/>
                         
                         <label for="time">Time:</label>
-                        <input id="time" type="text" name="time" value="${exists and event.time or None}"/>
+                        <input id="time" type="text" name="time" value="${event and event.time or None}"/>
                     </div>
                 </td>
             </tr>
@@ -64,14 +66,14 @@
             <input value="Save" type="submit" class="button-save" />
           </div>
           
-          <input type="hidden" name="allday" value="${event.allDay}"/>          
           <input type="hidden" name="calendar" value="${event.calendar}" py:if="event and event.id"/>
           <input py:if="exists" type="hidden" name="id" value="${event.id}"/>
         </form>
         <script type="text/javascript">/*<![CDATA[*/
-        function eventFormManager(rootSel, sysUrl){ 
+        var parseDate = $.fullCalendar.parseISO8601;
+        
+        function eventFormManager(rootSel, dates, sysUrl){ 
             var rpc;
-            var parseDate = $.fullCalendar.parseISO8601;
             function toISO8601(val){
                 if(typeof val=='undefined'){
                     return val;
@@ -83,10 +85,6 @@
                 }
                 return val;
             }
-            var ctx = {
-                initialStart : parseDate('${event.start}'),
-                initialEnd   : parseDate('${event.end}')
-            };
                       
             var root = $(rootSel);
 
@@ -109,72 +107,122 @@
                     $('#time').attr('disabled', '');
                 }
             }
-            
-            function setupDateFields(start, end){
-                if(! (start || end)){
-                    return;
-                }
-                var shiftDown = true;
-                if(typeof start=='boolean'){
-                    start = new Date();
-                    start.setTime($('#start').val()*1000);
-                    shiftDown =false;
-                }
-                
-                if(typeof end == 'undefined'){
-                    end = new Date();
-                    end.setTime($('#end').val()*1000);
-                }
-                if(start>end && ctx){
-                    if (shiftDown){
-                        end = new Date();
-                        end.setTime(start.getTime()+ctx.duration);
-                    }else{
-                        start = new Date();
-                        start.setTime(end.getTime()-ctx.duration);
-                    }
-                }
-                $('#start').val(Math.round(start.getTime()/1000));
-                $('#end').val(Math.round(end.getTime()/1000));
-
-                var fmt = $.fullCalendar.formatDate;
-                $('#dtstart').val(fmt(start,'yyyy-MM-dd HH:mm'));                
-                $('#dtend').val(fmt(end,'yyyy-MM-dd HH:mm'));               
-                toggleTimeTrackTime();
-            }
-            
+    
             function setupCallback(root){
                 if(popup_context && popup_context.setup){
                     popup_context.setup(root);
                 }
             }
+            var datesManager;
+            function DatesManager(){
+                var duration, start, end, 
+                    allday= false, 
+                    dateFields = $('.date-picker-target', root);
+                function fmt(date){
+                    return $.fullCalendar.formatDate(date, 'yyyy-MM-dd HH:mm');
+                }
+                
+                function parseDateIfNedded(val){
+                    if (typeof val=='object'){
+                        return val
+                    }
+                    return parseDate(toISO8601(val), true);
+                }
+
+                function setAllDay(flag){
+                    allday = flag;
+                    var inst1 = $.datepicker._getInst($('#dtstart').get(0));
+                    var inst2 = $.datepicker._getInst($('#dtend').get(0));
+                    inst1.settings['showTime'] = !flag;
+                    inst2.settings['showTime'] = !flag;
+                }
+                function setStart(date){
+                    date = parseDateIfNedded(date);
+                    if(allday){
+                        date.setHours(0);
+                        date.setMinutes(0);
+                        date.setSeconds(0);
+                        date.setMilliseconds(0);
+                    }
+                    if(start==date){
+                        return;
+                    }
+                    start = date;
+                    $('#start').val(Math.floor(date.getTime()/1000));
+                    $('#dtstart').val(fmt(date));
+                    if(typeof duration!='undefined'){
+                        var newEnd = new Date(start.getTime()+duration);
+                        this.setEnd(newEnd);
+                    }
+                    toggleTimeTrackTime();
+                }
+                function setEnd(date){
+                    date = parseDateIfNedded(date);
+                    if(allday){
+                        date.setHours(23);
+                        date.setMinutes(59);
+                        date.setSeconds(59);
+                        date.setMilliseconds(999);
+                    }
+                    if(end==date){
+                        return;
+                    }
+                    end = date;
+                    $('#end').val(Math.floor(date.getTime()/1000));
+                    $('#dtend').val(fmt(date));
+                    if(date<start){
+                        var newStart = new Date(end.getTime()-duration);
+                        this.setStart(newStart);
+                    }else{
+                        duration = end.getTime()-start.getTime();
+                    }
+                    toggleTimeTrackTime();
+                }
+                function setup(){
+                    dateFields.datepicker({
+                        dateFormat : 'yy-mm-dd',
+                        showTime: true,
+                        stepMinutes: 5,
+                        stepHours: 1,
+                        time24h: true
+                    });
+                    setAllDay($('#allday:checked', root).length>0);
+                    setStart(dates.start);
+                    setEnd(dates.end);
+                }
+                
+                this.setStart = setStart;
+                this.setEnd = setEnd;
+                this.setAllDay = setAllDay;
+                setup();
+            }
             
             function bindHandlers(){
                 $('form', root).submit(function(){
-                try{
-                    var vo = {}, arr = $(this).serializeArray();
-                    for(i in arr){
-                        vo[arr[i].name]=arr[i].value || '';
-                    }
-                    rpc.event.save(
-                        function(resp){
-                            popup_context.done(resp.result);
-                            return false;
-                        },
-                        vo['id'],
-                        vo['calendar'],
-                        vo['name'],
-                        vo['allday'],
-                        toISO8601(vo['dtstart']),
-                        toISO8601(vo['dtend']),
-                        vo['description'],
-                        vo['ticket'],
-                        vo['timetrack'],
-                        vo['auto'],
-                        vo['time'],
-                        new Date().getTimezoneOffset()
-                    );
-                }catch(e){}
+                    try{
+                        var vo = {}, arr = $(this).serializeArray();
+                        for(i in arr){
+                            vo[arr[i].name]=arr[i].value || '';
+                        }
+                        rpc.event.save(
+                            function(resp){
+                                popup_context.done(resp.result);
+                                return false;
+                            },
+                            vo['id'] || '',
+                            vo['calendar'],
+                            vo['name'],
+                            vo['allday'],
+                            toISO8601(vo['dtstart']),
+                            toISO8601(vo['dtend']),
+                            vo['description'],
+                            vo['ticket'],
+                            vo['timetrack'],
+                            vo['auto'],
+                            vo['time'],
+                            new Date().getTimezoneOffset()
+                        );
+                    }catch(e){}
                     return false;
                 });
                 $('#timetrack').bind('change', {}, function(){
@@ -187,26 +235,28 @@
                 $('.cancel', root).click(function(){
                     popup_context.cancel();
                 });
-                $('.date-picker-target', root).datepicker({
-                    dateFormat : 'yy-mm-dd',
-                    duration: '',
-                    showTime: true,
-                    stepMinutes: 5,
-                    stepHours: 1,
-                    time24h: true
-                 });
-                $('#dtstart', root).bind('change', {}, function(){
+                
+                $('#allday',root).change(function(){
+                    datesManager.setAllDay(this.checked);
+                });
+                
+                $('#dtstart', root).change(function(){
                     var pointer= $(this);
                     setTimeout(function(){
-                        setupDateFields(parseDate(toISO8601(pointer.val()), true));
+                        datesManager.setStart(pointer.val());
                     }, 200);
                 });
                 
-                $('#dtend', root).bind('change', {}, function(){
+                $('#dtend', root).change(function(){
                     var pointer= $(this);
                     setTimeout(function(){
-                        setupDateFields(false, parseDate(toISO8601(pointer.val()), true));
+                        datesManager.setEnd(pointer.val());
                     }, 200);
+                });
+                
+                $('#event_ticket', root).change(function(){
+                    var s = $(this);
+                    $('#event_name', root).val($('option[value='+s.val()+']', s).text());
                 });
 
             }
@@ -224,19 +274,25 @@
                 );
 
             }
-            function init(root, ctx){
-                ctx.duration = Math.round(ctx.initialEnd.getTime())- Math.round(ctx.initialStart.getTime());
+            function init(root){
                 setupCallback(root);
-                setupDateFields(ctx.initialStart, ctx.initialEnd);
+                datesManager = new DatesManager();
                 toggleTimeTrackContainer();
                 toggleTimeTrackTime();
                 bindHandlers();
                 setupRpc(sysUrl);
             }
             
-            init(root, ctx);
+            init(root);
         };
-        eventFormManager("#popup-event-editor", "${href.login('xmlrpc')}");
+        eventFormManager(
+            "#popup-event-editor", 
+            {
+                start : parseDate('${event.start}', false),
+                end   : parseDate('${event.end}', false)
+            },
+            "${href.login('xmlrpc')}"
+        );
         /*]]>*/</script>
 
     </div>

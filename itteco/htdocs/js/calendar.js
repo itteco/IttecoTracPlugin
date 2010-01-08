@@ -29,6 +29,12 @@
             tzoffset : new Date().getTimezoneOffset(),
             debug : true
         };
+    
+        function notifyUIChanges(){
+            if($.isFunction(settings.renderCallback)){
+                settings.renderCallback();
+            }
+        }
         window.popup_context = {};
         function log(){
             if(settings.debug && console && console.log){
@@ -305,8 +311,9 @@
                         calendar.disabled = !this.checked;
                         item.toggleClass('calendar-disabled', calendar.disabled);
                         ctx.managers.events.rerenderEvents(calendar.id);
-                    });                    
-                });        
+                    });           
+                });
+                notifyUIChanges();
             }
             this.read = readCalendars;
             this.getCalendar= function(){
@@ -385,11 +392,38 @@
             
             function renderTickets(){
                 var c = $(settings.tickets);
-                for(id in tickets){
-                    var tktElem;
-                    c.append(tktElem = $('<li id="ticket_'+id+'" class="ticket"> #'+id+' '+tickets[id].summary+'</li>'));
+                $.each(tickets, function(id,ticket){
+                    var tktElem, mover;
+                    c.append(tktElem = $('<li id="ticket_'+id+'" class="ticket"/>')
+                        .append(mover=$('<span class="ticket-mover">&#x00AB;</span>'))
+                        .append('<span class="ticket-title">#'+id+' '+ticket.summary+'</span>')
+                    );
+                    mover.click(function(){
+                        function noop(){}
+                        function cancel(){
+                            tb_remove();
+                            return false;
+                        }
+                        popup_context = {
+                            setup  : noop,
+                            cancel : cancel,
+                            done: function(res){
+                                ctx.managers.events.renderEvent(res);
+                                return cancel();
+                            }
+                        }
+
+                        var currentCalendar = ctx.managers.calendars.getCalendar();
+                        var calId = currentCalendar && currentCalendar.id || '';
+                        tb_show(null, settings.rootUrl+'/popup/events/?calendar='+calId+
+                            '&ticket='+id +
+                            '&date='+(Math.ceil(new Date().getTime()/30/60/1000)*30*60)+
+                            '&height=500&width=600', null);
+
+                    });
                     //tktElem.draggable();
-                }
+                });
+                notifyUIChanges();
             }
             
             ctx.addListener(readActiveTickets);
@@ -532,16 +566,12 @@
                         serializeAndSaveEvent(calEvent);           
                     },
                     viewDisplay : function(view){
-                        if($.isFunction(settings.renderCallback)){
-                            settings.renderCallback();
-                        }
+                        notifyUIChanges();
                     }
                 });   
             }
-
             
-            function showEventPopup(data){
-            }
+            this.renderEvent = renderEvent;
             
             this.rerenderEvents = function(calId){
                 log('rerenderEvents', calId);
@@ -562,9 +592,7 @@
                 renderCalendar();
                 fullCalendar.fullCalendar('addEventSource',readEvents);
             }
-            
-            this.showEventPopup = showEventPopup;
-            
+                       
             ctx.reportReady(this);        
         }
         

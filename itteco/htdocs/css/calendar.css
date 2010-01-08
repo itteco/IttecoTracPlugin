@@ -570,3 +570,7 @@
 	background: url(./../images/trace-remove.png) no-repeat 0 -15px;
     cursor: pointer;
 }
+.ticket-mover {
+    color: #4CB052;
+    cursor: pointer;
+}

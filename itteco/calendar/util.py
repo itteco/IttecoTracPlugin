@@ -31,9 +31,16 @@ def cal_as_dict(cal, username):
     }
     return c
     
-def event_as_dict(event, username=None):
+def event_as_dict(event, own=False):
     tt = event.time_track
-    time = tt and tt.exists and tt.time or (event.dtend - event.dtstart).seconds/60
+    time = 0
+    if tt and tt.exists:
+        time = tt.time
+    else:
+        if event.allday:
+            time = 24*60#all day event is 24 hours long
+        else:
+            time = (event.dtend - event.dtstart).seconds/60
     
     e= {
         'id'         : event.id, 
@@ -41,11 +48,11 @@ def event_as_dict(event, username=None):
         'end'        : format_datetime(event.dtend,'iso8601', utc),
         'allDay'     : event.allday==1,
         'name'       : event.title, 
-        'own'        : username and event.owner==username or None,
+        'own'        : own,
         'calendar'   : event.calendar, 
         'description': event.description,
         'ticket'     : event.ticket,
-        'timetrack'  : tt and tt.exists,
+        'timetrack'  : tt and True or False,
         'auto'       : (tt and tt.auto and True) or (tt is None and True) or False,
         'time'       : '%02d:%02d' % (time/60, time % 60)
     }
