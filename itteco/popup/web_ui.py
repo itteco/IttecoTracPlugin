@@ -10,7 +10,7 @@ from trac.ticket.model import Ticket, Resolution, Type
 from trac.util.datefmt import utc, to_datetime
 from trac.util.translation import _
 from trac.web.api import IRequestHandler
-from trac.web.chrome import ITemplateProvider, add_script, add_stylesheet
+from trac.web.chrome import ITemplateProvider
 
 from itteco.init import IttecoEvnSetup
 from itteco.calendar.model import Calendar, CalendarType, Event, TimeTrack

@@ -136,7 +136,7 @@
                 <td><xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></td>
             </tr>
             <tr py:if="obj and obj.id!='new' and cfg.workflow">
-                <th>Actions:</th>
+                <th><label>Actions:</label></th>
                 <td>
                     <div py:for="key, label, controls, hints in action_controls">
                       <input type="radio" id="action_$key" name="field_action" value="$key" checked="${action == key or None}" />

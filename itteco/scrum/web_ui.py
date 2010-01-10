@@ -20,7 +20,7 @@ from trac.util.datefmt import utc, to_timestamp, format_datetime
 from trac.util.translation import _
 
 from trac.web.api import IRequestHandler, ITemplateStreamFilter
-from trac.web.chrome import INavigationContributor, add_script, add_stylesheet
+from trac.web.chrome import INavigationContributor, add_stylesheet
 
 from itteco.init import IttecoEvnSetup
 from itteco.scrum.api import ITeamMembersProvider
@@ -28,7 +28,7 @@ from itteco.scrum.burndown import IBurndownInfoProvider
 from itteco.ticket.model import StructuredMilestone, TicketLinks
 from itteco.ticket.utils import get_tickets_for_milestones, get_tickets_by_ids
 from itteco.utils import json
-from itteco.utils.render import get_powered_by_sign
+from itteco.utils.render import get_powered_by_sign, add_jscript
 
 def add_whiteboard_ctxtnav(data, elm_or_label, href=None, **kwargs):
     """Add an entry to the whiteboard context navigation bar.
@@ -225,20 +225,26 @@ class DashboardModule(Component):
             board_type = _get_req_param(req, 'board_type', 'team_tasks')
             add_stylesheet(req, 'common/css/roadmap.css')
             add_stylesheet(req, 'itteco/css/common.css')
-            add_stylesheet(req, 'itteco/css/jquery.ui/themes/flora/flora.dialog.css')
-            add_stylesheet(req, 'itteco/css/thickbox/thickbox.css')
+            add_stylesheet(req, 'itteco/css/colorbox/colorbox.css')
             
-            add_script(req, 'itteco/js/jquery.ui/ui.core.js')
-            add_script(req, 'itteco/js/jquery.ui/ui.dialog.js')
-            add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
-            add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
-            add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
-            add_script(req, 'itteco/js/thickbox/thickbox.js')
-            add_script(req, 'itteco/js/jquery.cookies.js')
-            add_script(req, 'itteco/js/custom_select.js')
-            add_script(req, 'itteco//js/jquery.rpc.js')
-            add_script(req, 'itteco/js/whiteboard.js')
-
+            add_jscript(
+                req, 
+                [
+                    'stuff/ui/ui.core.js',
+                    'stuff/ui/ui.draggable.js',
+                    'stuff/ui/ui.droppable.js',
+                    'stuff/ui/ui.resizable.js',
+                    'stuff/ui/plugins/fullcalendar.js',
+                    'stuff/ui/plugins/jquery.jeditable.js',
+                    'stuff/ui/plugins/jquery.colorbox.js',
+                    'stuff/plugins/jquery.cookies.js',
+                    'stuff/plugins/jquery.rpc.js',
+                    'custom_select.js',
+                    'whiteboard.js'
+                ],
+                IttecoEvnSetup(self.env).debug
+            )
+            
             if board_type != req.args.get('board_type'):
                 #boardtype was not implicitly  selected, let's restore previos state
                 req.redirect(req.href.whiteboard(board_type))
@@ -275,7 +281,7 @@ class DashboardModule(Component):
         milestone = self._resolve_milestone(milestone_name, include_sub_mils, show_closed_milestones)
         if (milestone and not isinstance(milestone, list) and milestone != milestone_name):
             req.redirect(req.href.whiteboard(board_type, milestone))
-        add_script(req, 'itteco/js/taskboard.js')
+        add_jscript(req, 'taskboard.js', IttecoEvnSetup(self.env).debug)
 
         all_tkt_types = set([ticket.name for ticket in Type.select(self.env)])
                
@@ -337,7 +343,7 @@ class DashboardModule(Component):
         data['row_items_iterator']= sorted([s['scope_item'] for s in wb_items.values()], key=mkey)
             
     def _add_storyboard_data(self, req, data):
-        add_script(req, 'itteco/js/storyboard.js')
+        add_jscript(req, 'storyboard.js', IttecoEvnSetup(self.env).debug)
         selected_mil_level = _get_req_param(req,'mil_level',self.default_milestone_level)
         
         mils_tree = StructuredMilestone.select(self.env, True)
@@ -577,7 +583,7 @@ class DashboardModule(Component):
     
     # Burndown related methods
     def _add_burndown_data(self, req, data):
-        add_script(req, 'itteco/js/swfobject.js')
+        add_jscript(req, 'stuff/swfobject.js', IttecoEvnSetup(self.env).debug)
         mils_tree = StructuredMilestone.select(self.env, True)
         show_closed_milestones = _get_req_bool_param(req, 'show_closed_milestones')
         mils, mils_dict = self._get_milestones_by_level(mils_tree, 'Sprint', show_closed_milestones)

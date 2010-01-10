@@ -31,7 +31,7 @@ class CalendarRPC(Component):
                 (dict, int, str, int, str), \
                 (dict, int, str, int, str, int)
             ), self.save)
-        yield (None, ((dict, int),), self.delete)
+        yield (None, ((dict, int),), self.remove)
 
     # Exported methods
     def query(self, req):
@@ -65,7 +65,7 @@ class CalendarRPC(Component):
             c.insert()            
         return cal_as_dict(c, username)
    
-    def delete(self, req, id):
+    def remove(self, req, id):
         """ Deleted the given calendar"""
         username = req.authname
         req.perm.require('CALENDAR_DELETE', self.calendar_realm(id=id))

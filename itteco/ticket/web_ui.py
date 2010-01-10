@@ -15,14 +15,15 @@ from trac.util.datefmt import to_timestamp, utc
 from trac.util.translation import _
 from trac.util.text import to_unicode
 from trac.web.api import IRequestHandler, IRequestFilter, ITemplateStreamFilter
-from trac.web.chrome import Chrome, add_stylesheet, add_script, add_ctxtnav
+from trac.web.chrome import Chrome, add_stylesheet, add_ctxtnav
 from trac.wiki.web_ui import WikiModule
 
+from itteco.init import IttecoEvnSetup
 from itteco.ticket.admin import IttecoMilestoneAdminPanel
 from itteco.ticket.model import TicketLinks, StructuredMilestone
 from itteco.ticket.utils import get_fields_by_names, get_tickets_by_ids
 from itteco.utils.json import write
-from itteco.utils.render import hidden_items
+from itteco.utils.render import hidden_items, add_jscript
 
 class IttecoTicketModule(Component):
     implements(ITemplateStreamFilter, ITimelineEventProvider, IRequestFilter)
@@ -54,13 +55,25 @@ class IttecoTicketModule(Component):
             or req.path_info.startswith('/milestone'):
             
             add_stylesheet(req, 'itteco/css/common.css')
-            add_script(req, 'itteco/js/jquery.ui/ui.core.js')
-            add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
-            add_script(req, 'itteco/js/custom_select.js')
+            add_jscript(
+                req, 
+                [
+                    'stuff/ui/ui.core.js',
+                    'stuff/ui/ui.resizable.js',
+                    'custom_select.js'
+                ],
+                IttecoEvnSetup(self.env).debug
+            )
         if req.path_info.startswith('/ticket/'):
-            add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
-            add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
-            add_script(req, 'itteco/js/dndsupport.js')
+            add_jscript(
+                req, 
+                [
+                    'stuff/ui/ui.draggable.js',
+                    'stuff/ui/ui.droppable.js',
+                    'dndsupport.js'
+                ],
+                IttecoEvnSetup(self.env).debug
+            )
             tkt = data['ticket']
             links = TicketLinks(self.env, tkt)
             data['filters']=self._get_search_filters(req)

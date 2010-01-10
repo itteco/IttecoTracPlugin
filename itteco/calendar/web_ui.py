@@ -15,7 +15,7 @@ from trac.util.datefmt import FixedOffset, utc, to_timestamp, to_datetime, get_t
                               format_date, format_datetime
 
 from trac.web.api import IRequestHandler, ITemplateStreamFilter
-from trac.web.chrome import INavigationContributor, add_script, add_stylesheet, add_link
+from trac.web.chrome import INavigationContributor, add_stylesheet, add_link
 
 from itteco.calendar.model import CalendarType, Calendar, Event, TimeTrack
 from itteco.calendar.util import *
@@ -23,7 +23,7 @@ from itteco.calendar.util import *
 from itteco.init import IttecoEvnSetup
 from itteco.ticket.api import IMilestoneChangeListener
 from itteco.ticket.model import StructuredMilestone
-from itteco.utils.render import get_powered_by_sign
+from itteco.utils.render import get_powered_by_sign, add_jscript
  
 class CalendarModule(Component):
     implements(INavigationContributor, IRequestHandler, ITemplateStreamFilter, \
@@ -49,22 +49,28 @@ class CalendarModule(Component):
     
     def _render_ui(self, req):
         add_stylesheet(req, 'itteco/css/fullcalendar.css')
-        add_stylesheet(req, 'itteco/css/thickbox/thickbox.css')
+        add_stylesheet(req, 'itteco/css/colorbox/colorbox.css')
         add_stylesheet(req, 'itteco/css/common.css')
         add_stylesheet(req, 'itteco/css/calendar.css')
 
-        add_script(req, 'itteco/js/thickbox/thickbox.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.core.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.draggable.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.droppable.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.datepicker.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.slider.js')
-        add_script(req, 'itteco/js/jquery.timepicker.js')
-        add_script(req, 'itteco/js/jquery.rpc.js')
-        add_script(req, 'itteco/js/jquery.jeditable.js')
-        add_script(req, 'itteco/js/fullcalendar.min.js')
-        add_script(req, 'itteco/js/calendar.js')
+        add_jscript(
+            req, 
+            [
+                'stuff/ui/ui.core.js',
+                'stuff/ui/ui.draggable.js',
+                'stuff/ui/ui.droppable.js',
+                'stuff/ui/ui.resizable.js',
+                'stuff/ui/ui.datepicker.js',
+                'stuff/ui/ui.slider.js',
+                'stuff/ui/plugins/fullcalendar.js',
+                'stuff/ui/plugins/jquery.jeditable.js',
+                'stuff/ui/plugins/jquery.colorbox.js',
+                'stuff/ui/plugins/timepicker.js',
+                'stuff/plugins/jquery.rpc.js',
+                'calendar.js'
+            ],
+            IttecoEvnSetup(self.env).debug
+        )
     
         icshref = req.href.calendar(format='ics')
         add_link(req, 'alternate', icshref, _('iCalendar'), 'text/calendar', 'ics')

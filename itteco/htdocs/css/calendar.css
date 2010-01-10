@@ -117,7 +117,7 @@
 .ui-slider-vertical .ui-slider-range-min { bottom: 0; }
 .ui-slider-vertical .ui-slider-range-max { top: 0; }
 
-#ui-datepicker-div { z-index:105}
+#ui-datepicker-div { z-index:1005}
 
 
 /*
@@ -543,7 +543,7 @@
     border-bottom: 1px solid white;
 }
 
-#ui-timepicker-div, .time-picker{ z-index: 105}
+#ui-timepicker-div, .time-picker{ z-index: 1005}
 
 .theme-selector {border: 1px solid #d3d3d3; width:17px; }
 .theme-selector .toggler {height: 17px;}

@@ -7,7 +7,10 @@ from trac.util.datefmt import utc, parse_date, get_date_format_hint, \
                               get_datetime_format_hint
 from trac.util.translation import _
 
+from itteco.init import IttecoEvnSetup
 from itteco.ticket.model import StructuredMilestone
+from itteco.utils.render import get_powered_by_sign, add_jscript
+
 from trac.web.chrome import add_link, add_script,add_stylesheet
 
 class IttecoMilestoneAdminPanel(MilestoneAdminPanel):
@@ -16,9 +19,15 @@ class IttecoMilestoneAdminPanel(MilestoneAdminPanel):
     def _render_admin_panel(self, req, cat, page, milestone):
         req.perm.require('TICKET_ADMIN')
         add_stylesheet(req, 'itteco/css/common.css')
-        add_script(req, 'itteco/js/jquery.ui/ui.core.js')
-        add_script(req, 'itteco/js/jquery.ui/ui.resizable.js')
-        add_script(req, 'itteco/js/custom_select.js')
+        add_jscript(
+            req, 
+            [
+                'stuff/ui/ui.core.js',
+                'stuff/ui/ui.resizable.js',
+                'custom_select.js'
+            ],
+            IttecoEvnSetup(self.env).debug
+        )
         # Detail view?
         if milestone:
             mil = StructuredMilestone(self.env, milestone)

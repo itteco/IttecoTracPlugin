@@ -27,18 +27,18 @@ class IttecoReportModule(Component):
                             # TODO fix scripts base path
                             tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/common.css")),
                             tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css")),
-                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/thickbox/thickbox.css"))
+                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/colorbox/colorbox.css"))
                         )
                     ).append(
                         tag(
-                            script_tag("itteco/js/jquery.ui/ui.core.js"),
-                            script_tag("itteco/js/jquery.ui/ui.draggable.js"),
-                            script_tag("itteco/js/jquery.ui/ui.droppable.js"),
-                            script_tag("itteco/js/jquery.ui/ui.resizable.js"),
-                            script_tag('itteco/js/thickbox/thickbox.js'),
-                            script_tag('itteco/js/custom_select.js'),
-                            script_tag('itteco/js/jquery.rpc.js'),
-                            script_tag("itteco/js/report.js")
+                            script_tag("itteco/js/stuff/ui/ui.core.min.js"),
+                            script_tag("itteco/js/stuff/ui/ui.draggable.min.js"),
+                            script_tag("itteco/js/stuff/ui/ui.droppable.min.js"),
+                            script_tag("itteco/js/stuff/ui/ui.resizable.min.js"),
+                            script_tag('itteco/js/stuff/ui/plugins/jquery.colorbox.min.js'),
+                            script_tag('itteco/js/stuff/plugins/jquery.rpc.min.js'),
+                            script_tag('itteco/js/custom_select.min.js'),
+                            script_tag("itteco/js/report.min.js")
                         )
                     )
                     

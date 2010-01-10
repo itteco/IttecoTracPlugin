@@ -1,4 +1,5 @@
 from genshi.builder import tag
+from trac.web.chrome import add_script
 from itteco import __version__
 
 def hidden_items(field_id, ids):    
@@ -15,3 +16,14 @@ def get_powered_by_sign():
     return tag.p("Powered by ", 
             tag.a(tag.strong("IttecoTracPlugin %s" % __version__), href="http://tracplugin.itteco.com/"), 
             tag.br(), tag("By ", tag.a("Itteco Software", href="http://www.itteco.com"),),class_="left")
+    
+def add_jscript(req, scripts, debug=False):
+    if isinstance(scripts, basestring):
+        scripts = [scripts,]
+    prefix = 'itteco/js/'
+    sufix = '.min.js'
+    if debug:
+        prefix = prefix+'debug/'
+        sufix = '.js'
+    for script in scripts:
+        add_script(req, prefix+script[:-3]+sufix)

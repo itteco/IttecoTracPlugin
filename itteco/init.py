@@ -23,7 +23,7 @@
 
 import pkg_resources
 from trac.core import *
-from trac.config import ListOption
+from trac.config import BoolOption, ListOption
 from trac.env import IEnvironmentSetupParticipant
 from trac.ticket.model import Type
 from trac.web.chrome import ITemplateProvider
@@ -36,7 +36,10 @@ from itteco.utils.config import get_version, set_version, do_upgrade
 class IttecoEvnSetup(Component):
     """ Initialise database and environment for itteco components """
     implements(IEnvironmentSetupParticipant,ITemplateProvider)
-    
+
+    debug = BoolOption('itteco-config', 'debug',
+        doc="Debug switch. Toggles the js from debug to production/minified version.")
+        
     milestone_levels = ListOption('itteco-roadmap-config', 'milestone_levels',[],
         doc="All possible levels of hierarhial milestones.")
 

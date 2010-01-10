@@ -1,4 +1,8 @@
 # Itteco Trac Plugin Changelog #
+#IttecoTracPlugin 0.2.3 (January 10, 2010)
+* Popups implementation
+* switch to colorbox
+
 #IttecoTracPlugin 0.2.2 (December 9, 2009)
 * Rework calendars to jQuery full calendar implementation
 
