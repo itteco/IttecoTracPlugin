@@ -7,6 +7,7 @@ from trac.util.datefmt import FixedOffset, format_datetime, parse_date, utc, to_
 
 from tracrpc.api import IXMLRPCHandler
 
+from itteco.init import IttecoEvnSetup
 from itteco.calendar.model import Calendar, Event, TimeTrack
 from itteco.calendar.util import *
 from itteco.ticket.model import TicketLinks
@@ -169,6 +170,7 @@ class TicketConfigRPC(Component):
     def xmlrpc_methods(self):
         yield (None, ((dict,),), self.defaults)
         yield (None, ((dict, int, int), (dict, int, int, int)), self.trace)
+        yield (None, ((list,),),  self.my_active_tickets)
 
     def defaults(self, req):
         """ Returns dictionary of the default field values"""
@@ -184,3 +186,24 @@ class TicketConfigRPC(Component):
             tkt_link.outgoing_links.add(target)
         tkt_link.save()
         return {'source' : source, 'target': target}
+        
+    def my_active_tickets(self, req):
+        """ Returns all none closed tickets assigned to the current user."""
+        user = req.authname
+        def ticket_as_dict(id, summary):
+            return {
+                'ticketId': id, 
+                'summary': summary
+            }
+            
+        final_statuses = [status for status in IttecoEvnSetup(self.env).final_statuses]
+
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        cursor.execute("""
+            SELECT id as ticketId, summary
+              FROM ticket
+             WHERE owner = %%s AND status NOT IN (%s)""" % ("%s," * len(final_statuses))[:-1],
+           [user,]+final_statuses)
+        return [ticket_as_dict(tktId, summary) for tktId, summary in cursor]
+

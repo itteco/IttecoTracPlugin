@@ -14,6 +14,7 @@ from trac.web.chrome import ITemplateProvider
 
 from itteco.init import IttecoEvnSetup
 from itteco.calendar.model import Calendar, CalendarType, Event, TimeTrack
+from itteco.calendar.rpc import TicketConfigRPC
 from itteco.calendar.util import cal_as_dict, event_as_dict
 from itteco.ticket.model import StructuredMilestone
 from itteco.scrum.web_ui import DashboardModule
@@ -72,31 +73,13 @@ class PopupModule(Component):
             event.time_track = tt
         data = {
             'event'     : event and event_as_dict(event, own) or None,
-            'tickets'   : self._get_active_tickets(user),
+            'tickets'   : TicketConfigRPC(self.env).my_active_tickets(req),
             'calendars' : 
                 [cal_as_dict(cal, user) for cal in Calendar.select(self.env, owner=user)
                     if cal.type!=CalendarType.Reference]
         }
         return 'itteco_event_form.html', data, None
     
-    def _get_active_tickets(self, user):
-        def ticket_as_dict(id, summary):
-            return {
-                'ticketId': id, 
-                'summary': summary
-            }
-            
-        final_statuses = [status for status in IttecoEvnSetup(self.env).final_statuses]
-
-        db = self.env.get_db_cnx()
-        cursor = db.cursor()
-        cursor.execute("""
-            SELECT id as ticketId, summary
-              FROM ticket
-             WHERE owner = %%s AND status NOT IN (%s)""" % ("%s," * len(final_statuses))[:-1],
-           [user,]+final_statuses)
-        return [ticket_as_dict(tktId, summary) for tktId, summary in cursor]
-
     def tickets(self, req):
         tkt_id = req.args.get('obj_id')
         if tkt_id:        

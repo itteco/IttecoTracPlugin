@@ -376,10 +376,12 @@
             this.name = 'tickets';
             var tickets = {};
             function readActiveTickets(){
-                ctx.managers.transport.proxy.ticket.query(
+                ctx.managers.transport.proxy.ticketconfig.my_active_tickets(
                     function(resp){
                         var multicall = new Multicall();
-                        $.each(resp.result, function(i, tkt_id){
+                        $.each(resp.result, function(i, o){
+                            log('read-ticket-header', o);
+                            var tkt_id = o.ticketId;
                             multicall.push('ticket.get', tkt_id, function(tkt){
                                 tickets[tkt_id] =tkt;
                             });
