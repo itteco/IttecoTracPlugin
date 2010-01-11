@@ -105,7 +105,7 @@ class EventRPC(Component):
     
     def save(self, req, id, calendar, name, allday, start, end, description, ticket, timetrack, auto, time, tzoffset=None):
         username =  req.authname
-        id = id or None
+        id = id and str(id) or None
         tz = tzoffset and FixedOffset(-1*int(tzoffset), 'Browser offset') or utc
         c = Calendar(self.env, calendar)
         req.perm.require('CALENDAR_VIEW', c.resource)

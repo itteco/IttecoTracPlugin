@@ -37,7 +37,7 @@
         }
         window.popup_context = {};
         function log(){
-            if(settings.debug && console && console.log){
+            if(settings.debug && typeof(console)!='undefined' && console.log){
                 console.log.apply(console, arguments);
             }
         }
@@ -208,7 +208,7 @@
                         renderCalendars();
                         ctx.managers.events.rerenderEvents(cal.id);
                     },
-                    calendar.id,
+                    calendar.id || '',
                     calendar.name,
                     calendar.theme,
                     calendar.type,
@@ -446,6 +446,12 @@
                 }
                 for(p in dto){
                     calEvent[p] = dto[p];
+                }
+                if(typeof (dto.start)!='object'){
+                    calEvent.start = $.fullCalendar.parseISO8601(dto.start || '', false);
+                }
+                if(typeof (dto.end)!='object'){
+                    calEvent.end= $.fullCalendar.parseISO8601(dto.end || '', false);
                 }
                 
                 calEvent.title = dto.name;

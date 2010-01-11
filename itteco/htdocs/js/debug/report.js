@@ -1,3 +1,9 @@
+function log(){
+    if(typeof(console)!='undefined' && console.log){
+        console.log.apply(console, arguments);
+    }
+}
+
 function showPopup(ticket, popupName){
     function cancel(){
         $.fn.colorbox.close();
