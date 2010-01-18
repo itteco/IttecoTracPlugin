@@ -1,4 +1,7 @@
 # Itteco Trac Plugin Changelog #
+#IttecoTracPlugin 0.2.3 (January 18, 2010)
+* Implement inline editing for reports
+
 #IttecoTracPlugin 0.2.3 (January 10, 2010)
 * Popups implementation
 * switch to colorbox

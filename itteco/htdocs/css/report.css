@@ -82,3 +82,14 @@ body{
     width: 16px;
 }
 .ui-droppable .numrows{ margin-right: 17px;}
+
+.field-editor-save, .field-editor-cancel {
+    display: inline-block;
+    height: 16px;
+	width: 16px;
+	margin: 0;
+	padding: 0;
+}
+
+.field-editor-save{ background:  transparent url(./../images/accept.png) 0 0 !IMPORTANT;}
+.field-editor-cancel{ background:  transparent url(./../images/cancel.png) 0 0 !IMPORTANT;}

@@ -20,10 +20,13 @@ def get_powered_by_sign():
 def add_jscript(req, scripts, debug=False):
     if isinstance(scripts, basestring):
         scripts = [scripts,]
+    for script in scripts:
+        add_script(req, map_script(script, debug))
+        
+def map_script(script, debug=False):
     prefix = 'itteco/js/'
     sufix = '.min.js'
     if debug:
         prefix = prefix+'debug/'
         sufix = '.js'
-    for script in scripts:
-        add_script(req, prefix+script[:-3]+sufix)
+    return prefix+script[:-3]+sufix

@@ -151,7 +151,7 @@ function showFullEditor(ticket){
                                 var s = sMatch.text().match(/\d+/);
                                 var currQuantity = 0;
                                 if (s){
-                                    currQuantity = parseInt(s[0], 10);                            
+                                    currQuantity = parseInt(s[0], 10);
                                 }
                                 sMatch.text(getMatchesText(currQuantity+rows.length));
                             }

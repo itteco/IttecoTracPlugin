@@ -678,7 +678,7 @@ class DashboardModule(Component):
 
         if types:
             for type in types:
-                cfg = self.ticket_type_config[type]
+                cfg = self.ticket_type_config.get(type, {})
                 
                 common_descriptor.setdefault('fields',[]). \
                     extend(cfg.get('fields',[]))

@@ -1,58 +1,93 @@
 from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
+try:
+    import threading
+except ImportError:
+    import dummy_threading as threading
+
 from trac.core import implements, Component
+from trac.ticket.api import TicketSystem
 from trac.ticket.model import Ticket
 from trac.ticket.report import ReportModule
 from trac.util.translation import _
 from trac.web.api import ITemplateStreamFilter, IRequestFilter
 
+from itteco.init import IttecoEvnSetup
 from itteco.utils import json
+from itteco.utils.render import map_script
 
 class IttecoReportModule(Component):
     implements(ITemplateStreamFilter, IRequestFilter)
     
     mandatory_cols = ["__group__", "__group_preset__"]
     id_cols = ['ticket', 'id', '_id']
+    _config = None
+    
+    def __init__(self):
+        self._config_lock = threading.RLock()
+
     
     #ITemplateStreamFilter methods
     def filter_stream(self, req, method, filename, stream, data):
-        if req.path_info.startswith('/report/') and req.args and req.args.get('exec_groups'):
-            try:
-                tags =[]
-                link_builder = req.href.chrome
-                script_tag = lambda x: tag.script(type="text/javascript", src=link_builder(x))
-                stream |= Transformer("//head").prepend(
-                        tag(
-                            # TODO fix scripts base path
-                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/common.css")),
-                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css")),
-                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/colorbox/colorbox.css"))
-                        )
-                    ).append(
-                        tag(
-                            script_tag("itteco/js/stuff/ui/ui.core.min.js"),
-                            script_tag("itteco/js/stuff/ui/ui.draggable.min.js"),
-                            script_tag("itteco/js/stuff/ui/ui.droppable.min.js"),
-                            script_tag("itteco/js/stuff/ui/ui.resizable.min.js"),
-                            script_tag('itteco/js/stuff/ui/plugins/jquery.colorbox.min.js'),
-                            script_tag('itteco/js/stuff/plugins/jquery.rpc.min.js'),
-                            script_tag('itteco/js/custom_select.min.js'),
-                            script_tag("itteco/js/report.min.js")
-                        )
+        if req.path_info.startswith('/report/'):
+            link_builder = req.href.chrome
+            debug = IttecoEvnSetup(self.env).debug
+            def script_tag(path=None, content=None):
+                kw = { 'type' : "text/javascript"}
+                if path:
+                    kw['src'] = link_builder(map_script(path))
+                return tag.script(content , **kw)
+
+            stream |= Transformer("//head").append(
+                tag(
+                    script_tag('stuff/ui/plugins/jquery.jeditable.js'),
+                    script_tag("editable_report.js"),
+                    script_tag(
+                        content=
+                        "$(document).ready(function(){"+
+                            "$('#main').editableReport("+
+                                "{"+
+                                    "rpcurl: '"+req.href('login','xmlrpc')+"',"+
+                                    "fields: "+self._fields_dict(data.get('header_groups',[]))+"})"+
+                        "});"
                     )
-                    
-                for group, preset, quantity, full_quantity in req.args['exec_groups']:
-                    tags.append(tag.div(group+'\n', \
-                        tag.span(
-                            quantity and '(%d match%s)' % (quantity, quantity!=1 and 'es' or '') \
-                                or '(No matches)', class_='numrows'), \
-                        preset=preset, class_='report-result'))
-                stream |= Transformer("//*[@id='main']").after(
-                    tag.div(_render_conrol_panel(), tag.div(class_='content', *tags), id="dropbox"))
-            except ValueError,e:
-                #we do not fail the report it self, may be it works in read only mode
-                self.env.log.debug('Report decoration failed: %s' % e)
+                )
+            )
+
+            if req.args and req.args.get('exec_groups'):
+                try:
+                    stream |= Transformer("//head").prepend(
+                            tag(
+                                # TODO fix scripts base path
+                                tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/common.css")),
+                                tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css")),
+                                tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/colorbox/colorbox.css"))
+                            )
+                        ).append(
+                            tag(
+                                script_tag("stuff/ui/ui.core.js"),
+                                script_tag("stuff/ui/ui.draggable.js"),
+                                script_tag("stuff/ui/ui.droppable.js"),
+                                script_tag("stuff/ui/ui.resizable.js"),
+                                script_tag('stuff/ui/plugins/jquery.colorbox.js'),
+                                script_tag('stuff/plugins/jquery.rpc.js'),
+                                script_tag('custom_select.js'),
+                                script_tag("report.js")
+                            )
+                        )
+                    tags =[]
+                    for group, preset, quantity, full_quantity in req.args['exec_groups']:
+                        tags.append(tag.div(group+'\n', \
+                            tag.span(
+                                quantity and '(%d match%s)' % (quantity, quantity!=1 and 'es' or '') \
+                                    or '(No matches)', class_='numrows'), \
+                            preset=preset, class_='report-result'))
+                    stream |= Transformer("//*[@id='main']").after(
+                        tag.div(_render_conrol_panel(), tag.div(class_='content', *tags), id="dropbox"))
+                except ValueError,e:
+                    #we do not fail the report it self, may be it works in read only mode
+                    self.env.log.debug('Report decoration failed: %s' % e)
         return stream
 
     def _are_all_mandatory_fields_found(self, cols):
@@ -144,7 +179,59 @@ class IttecoReportModule(Component):
                     warn.append(_("You have no permission to modify ticket '%(ticket)s'", ticket=ticket_id))
             db.commit()
         req.write(json.write({'tickets':modified_tickets, 'warnings': warn}))
+        
+    def fields_config(self):
+        if self._config is None:
+            self._config_lock.acquire()
+            try:
+                if self._config is None: # double-check (race after 1st check)
+                    self._config = self._get_fields_config()
+            finally:
+                self._config_lock.release()
+        return self._config
 
+    def _get_fields_config(self):
+        fields = TicketSystem(self.env).get_ticket_fields()
+        default = {
+            'type' : 'text'
+        }
+        config ={}
+        for field in fields:
+            cfg = config.setdefault(field['name'], default.copy())
+            type = field['type']
+            if type=='radio':
+                type = 'select'
+            cfg['type'] = type
+            cfg['field_name'] = field['name']
+            if type=='select':
+                cfg['options'] = field['options']
+        mappings_config = self.env.config['itteco-report']
+        for option in mappings_config:
+            for synonym in mappings_config.getlist(option,''):
+                if synonym:
+                    config[synonym] = config[option].copy()
+        self.env.log.debug('itteco-report-config=%s' % config)
+        return config
+    
+    def _fields_dict(self, field_groups):    
+        res = '{'
+        config = self.fields_config()
+        first = True
+        for field_group in field_groups:
+            for field in field_group:
+                if field['hidden']:
+                    continue
+                fname = field['title'].lower()
+                cfg = config.get(fname)                
+                if cfg is None:
+                    continue
+                    
+                if not first:
+                    res +=','
+                first = False
+                res += fname +':' + str(cfg).replace("u'", "'")
+        res += '}'
+        return res
 def _render_conrol_panel():
     return tag.div(
       tag.span(
