@@ -52,5 +52,5 @@ setup(
         'itteco.calendar.api = itteco.calendar.api',
         'itteco.calendar.rpc = itteco.calendar.rpc']
     },
-    install_requires=['trac >= 0.11.3','genshi >= 0.5.1'], 
+    install_requires=['trac >= 0.11.3', 'genshi >= 0.5.1', 'TracXMLRPC >= 1.0.6'], 
 )
