@@ -2,25 +2,44 @@ from trac.db import Table, Column, Index, DatabaseManager
 _view_sql = """
     CREATE VIEW all_cal_events AS
     SELECT ''||id as id, title as title, description as description, calendar_id as calendar_id,
-           allday as allday,
            ticket as ticket, dtstart as dtstart, dtend as dtend,
            created as created, modified as modified
       FROM cal_event
     UNION
     SELECT name as id, name||'[Due]' as title, description as description , 0 as calendar_id, 
-           1 as allday,
            null as ticket, due as dtstart, due+3600 as dtend,
            null as created, null as modified
       FROM milestone
      WHERE COALESCE(due,0)<>0
     UNION
     SELECT name as id, name||'[Completed]' as title, description as description , 0 as calendar_id, 
-           1 as allday,
            null as ticket, completed as dtstart, completed+3600 as dtend,
            null as created, null as modified
       FROM milestone
      WHERE COALESCE(completed,0)<>0""";
          
+_view_sql_0_2_2 = """
+    CREATE VIEW all_cal_events AS
+    SELECT ''||id as id, title as title, description as description, calendar_id as calendar_id,
+           allday as allday,
+           ticket as ticket, dtstart as dtstart, dtend as dtend,
+           created as created, modified as modified
+      FROM cal_event
+    UNION
+    SELECT name as id, name||'[Due]' as title, description as description , 0 as calendar_id,
+           1 as allday,
+           null as ticket, due as dtstart, due+3600 as dtend,
+           null as created, null as modified
+      FROM milestone
+     WHERE COALESCE(due,0)<>0
+    UNION
+    SELECT name as id, name||'[Completed]' as title, description as description , 0 as calendar_id,
+           1 as allday,
+           null as ticket, completed as dtstart, completed+3600 as dtend,
+           null as created, null as modified
+      FROM milestone
+     WHERE COALESCE(completed,0)<>0""";
+
 _sql = [
     _view_sql,         
     """INSERT INTO calendar (id, name, owner, type)
@@ -31,7 +50,7 @@ _sql_0_2_2 = [
     "ALTER TABLE cal_event ADD COLUMN allday int",
     "UPDATE cal_event SET allday=0",
     "DROP VIEW all_cal_events",
-    _view_sql
+    _view_sql_0_2_2
 ]    
 
 _sql_0_2_3 = [
@@ -108,5 +127,10 @@ def upgrade_to_0_2_3(env, db, installed_version):
     for stmt in _sql_0_2_3:
         cursor.execute(stmt)
     wb_cfg = env.config['itteco-whiteboard-config']
-    wb_cfg.set('burndown_info_provider', wb_cfg.get('burndown_info_povider'))
+    if wb_cfg.get('burndown_info_povider'):
+        wb_cfg.set('burndown_info_provider', wb_cfg.get('burndown_info_povider'))
+
+    comp_config = env.config['components']
+    comp_config.set('tracrpc.*', 'enabled')
+
     env.config.save()
