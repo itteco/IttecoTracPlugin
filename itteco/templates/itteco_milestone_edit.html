@@ -1,0 +1,190 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="layout.html" />
+  <head>
+    <py:choose test="milestone.exists">
+      <title py:when="True">Edit Milestone ${milestone.name}</title>
+      <title py:otherwise="">New Milestone</title>
+    </py:choose>
+    <link rel="stylesheet" type="text/css"
+          href="${chrome.htdocs_location}css/roadmap.css" />
+    <script type="text/javascript" src="${chrome.htdocs_location}js/wikitoolbar.js"></script>
+    <script type="text/javascript">/*<![CDATA[*/
+      jQuery(document).ready(function($) {
+        function updateCompletedDate() {
+          var checked = $("#completed").checked();
+          $("#completeddate").enable(checked);
+          var retarget = $("#retarget");
+          retarget.enable(checked);
+          $("#target").enable(checked && retarget.checked());
+        }
+        $("#completed").click(updateCompletedDate);
+        updateCompletedDate();
+        $("#retarget").click(function(){ $("#target").enable(this.checked) });
+        $("#name").get(0).focus();
+        
+        var actions = $("#action input[name='workflow_action']");
+
+        function updateActionFields() {
+          actions.each(function () {
+            $(this).siblings().find("*[id]").enable($(this).checked());
+            $(this).siblings().filter("*[id]").enable($(this).checked());
+          });
+        }
+        updateActionFields();
+
+      });
+    /*]]>*/</script>
+  </head>
+
+  <body>
+    <div id="content" class="milestone">
+      <py:choose test="milestone.exists">
+        <h1 py:when="True">Edit Milestone ${milestone.name}</h1>
+        <h1 py:otherwise="">New Milestone</h1>
+      </py:choose>
+
+      <form id="edit" action="" method="post">
+        <input type="hidden" name="id" value="${milestone.name}" />
+        <input type="hidden" name="action" value="edit" />
+        <div class="panel panel-collapsible milestone-properties-editor">
+            <div class="panel-header">
+                <h2>Edit Milestone Details</h2>
+            </div>
+            <div class="panel-body">
+
+                <div class="form-container">
+                    <dl class="form trac-form">
+                        <dt><label for="name">Name of the milestone:</label></dt>
+                        <dd><input type="text" id="name" name="name" size="32" value="${milestone.name or req.args.get('name')}" /></dd>
+                        <dt><label for="completed">Completed:</label></dt>
+                        <dd>
+                            <input type="checkbox" id="completed" name="completed" checked="${milestone.completed or None}" />
+                            <input type="text" id="completeddate" name="completeddate"
+                                 size="${len(datetime_hint)}" title="Format: ${datetime_hint}"
+                                 value="${format_datetime(milestone.completed)}" />
+                            <em>Format: ${datetime_hint}</em>
+                        </dd>
+                        <dt><label for="duedate">Due:</label></dt>
+                        <dd>
+                            <input type="text" id="duedate" name="duedate" size="${len(date_hint)}"
+                                   value="${milestone.due and format_date(milestone.due)}" title="Format: ${date_hint}" />
+                            <em>Format: ${date_hint}</em>
+                        </dd>
+                        <py:if test="milestone_groups">
+                        <dt></dt>
+                        <dd>
+                            <input type="checkbox" id="retarget" name="retarget" checked="${not milestone.completed or None}" />
+                            <label for="retarget">Retarget associated open tickets to milestone:</label>
+                            <select id="target" name="target">
+                                <option value="">None</option>
+                                <optgroup py:for="(label, milestones) in milestone_groups"
+                                          py:if="milestones" label="${label}">
+                                  <option py:for="milestone in milestones"
+                                          py:content="milestone.name"></option>
+                                </optgroup>
+                            </select>
+                        </dd>
+                        </py:if>
+                        <dt>Parent:</dt>
+                        <dd><xi:include py:with="field_name='parent'; milestone_name= milestone.name;"  href="itteco_milestones_dd.html" /></dd>
+                        <py:for each="field in milestone.fields" py:with="value = milestone[field.name]" py:if="not field.hidden">
+                            <dt>
+                              <label for="field-${field.name}" py:if="field"
+                                     py:strip="field.type == 'radio'">${field.edit_label or field.label or field.name}:</label>
+                            </dt>
+                            <dd>
+                              <py:choose test="field.type" py:if="field">
+                                <select py:when="'select'" id="field-${field.name}" name="field_${field.name}">
+                                  <option py:if="field.optional"></option>
+                                  <option py:for="option in field.options"
+                                          selected="${value == option or None}"
+                                          py:content="option"></option>
+                                  <optgroup py:for="optgroup in field.optgroups"
+                                            py:if="optgroup.options"
+                                            label="${optgroup.label}">
+                                    <option py:for="option in optgroup.options"
+                                            selected="${value == option or None}"
+                                            py:content="option"></option>
+                                  </optgroup>
+                                </select>
+                                <textarea py:when="'textarea'" id="field-${field.name}" name="field_${field.name}"
+                                          cols="${field.width}" rows="${field.height}"
+                                          class="${field.format == 'wiki' and 'wikitext' or None}"
+                                          py:content="value"></textarea>
+                                <span py:when="'checkbox'">
+                                  <input type="checkbox" id="field-${field.name}" name="field_${field.name}"
+                                         checked="${value == '1' and 'checked' or None}" value="1" />
+                                  <input type="hidden" name="field_checkbox_${field.name}" value="1" />
+                                </span>
+                                <label py:when="'radio'"
+                                       py:for="idx, option in enumerate(field.options)">
+                                  <input type="radio" name="field_${field.name}" value="${option}"
+                                         checked="${value == option or None}" />
+                                  ${option}
+                                </label>
+                                <py:otherwise><!--! Text input fields -->
+                                  <py:choose>
+                                    <span py:when="field.cc_entry"><!--! Special case for Cc: field -->
+                                      <em>${field.cc_entry}</em>
+                                      <input type="checkbox" id="field-cc" name="cc_update"
+                                        title="This checkbox allows you to add or remove yourself from the CC list."
+                                        checked="${field.cc_update}" />
+                                    </span>
+                                    <span py:when="field.name == 'cc'">
+                                      <input  type="text" id="field-${field.name}"
+                                        title="Space or comma delimited email addresses and usernames are accepted."
+                                        name="field_${field.name}" value="${value}" />
+                                    </span>
+                                    <!--! All the other text input fields -->
+                                    <input py:otherwise="" type="text" id="field-${field.name}"
+                                      name="field_${field.name}" value="${value}" />
+                                  </py:choose>
+                                </py:otherwise>
+                              </py:choose>
+                            </dd>
+                        </py:for>
+                        <dt><label for="description">Description (you may use <a tabindex="42"
+                           href="${href.wiki('WikiFormatting')}">WikiFormatting</a> here):</label>
+                        </dt>
+                        <dd><textarea id="description" name="description" class="wikitext" rows="10" cols="78">
+${milestone.description}</textarea></dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="panel panel-collapsible milestone-status-editor">
+            <div class="panel-header">
+                <h2>Update Status</h2>
+            </div>
+            <div class="panel-body">
+                <fieldset id="action">
+                    <legend>Action</legend>
+                    <div py:for="key, label, controls, hints in action_controls">
+                      <input type="radio" id="action_$key" name="workflow_action" value="$key" checked="${workflow_action == key or None}" />
+                        <label for="action_$key">$label</label>
+                        $controls
+                        <span class="hint" py:for="hint in hints">$hint</span>
+                    </div>
+                </fieldset>
+            </div>
+        </div>
+        <div class="buttons" py:choose="milestone.exists">
+          <input type="submit" name="cancel" value="Cancel" />
+          <input py:when="True" type="submit" value="Submit changes" class="button-save"/>
+          <input py:otherwise="" type="submit" value="Add milestone" class="button-save"/>
+        </div>
+      </form>
+
+      <div id="help"><strong>Note:</strong> See
+        <a href="${href.wiki('TracRoadmap')}">TracRoadmap</a> for help on using
+        the roadmap.
+      </div>
+
+    </div>
+  </body>
+</html>

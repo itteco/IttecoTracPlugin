@@ -8,6 +8,7 @@ from trac.util.compat import set, sorted
 from trac.util import embedded_numbers, partition
 from trac.wiki.model import WikiPage
 
+from itteco.ticket.api import MilestoneSystem
 from itteco.init import IttecoEvnSetup
 
 _sql_select_wiki = "SELECT value FROM ticket_custom WHERE ticket=%s AND name='wiki_ref'"
@@ -96,61 +97,95 @@ class TicketLinks(object):
         cursor.execute(sql, (tkt_id, ))
         return cursor.fetchall()
 
-class StructuredMilestone(Milestone):
+class StructuredMilestone(object):
     """The model for structured milestone."""
-     
+    __proxy_attrs__ = ['name', 'due', 'completed', 'description', 'resource', 'exists', 'is_completed', 'is_late']
+    _kids = None
+    _level = None
     def __init__(self, env, milestone=None, db=None):
-        self.parent = self._old_parent = self._level = None
-        self._old_started = self.started = None
-        self._kids = []
-        self._kids_were_fetched= False
-        super(StructuredMilestone, self).__init__(env, milestone, db)
-        self._old_due = self.due
-        self._old_completed = self.completed
-        self._old_description = self.description
+        self.env = env
+        self.fields = MilestoneSystem(self.env).get_milestone_fields()
+        self.values = self._old = {}
 
-    is_started = property(fget=lambda self: self.started is not None)
+        if not isinstance(milestone, Milestone):
+            milestone = Milestone(env, milestone)
+            if milestone.exists:
+                self._fetch(milestone.name, db)
+            
+        self.milestone = milestone
+    
+    def __getattribute__(self, name):
+        if name in object.__getattribute__(self, "__proxy_attrs__"):
+            return getattr(object.__getattribute__(self, "milestone"), name)
+        return object.__getattribute__(self, name)
+    
+    def __setattr__(self, name, value):
+        if name in object.__getattribute__(self, "__proxy_attrs__"):
+            setattr(object.__getattribute__(self, "milestone"), name, value)
+        else:
+            self.__dict__[name]=value
+    
+    parent = property(fget= lambda self: self.values.get('parent'))
+    is_started = property(fget=lambda self: self.values.get('started') is not None)
     level = property(fget = lambda self: self._get_level(), fset = lambda self, val: self._set_level(val))
     can_be_closed = property(lambda self: self._can_be_closed())
-    kids = property (lambda self: self._get_kids(), lambda self, val: self._set_kids(val))
+    kids = property (lambda self: self._get_kids())
 
+    def __getitem__(self, name):
+        return self.values.get(name)
+
+    def __setitem__(self, name, value):
+        """Log ticket modifications so the table ticket_change can be updated"""
+        if name in self.values and self.values[name] == value:
+            return
+        if name not in self._old: # Changed field
+            self._old[name] = self.values.get(name)
+        elif self._old[name] == value: # Change of field reverted
+            del self._old[name]
+        if value:
+            if isinstance(value, list):
+                raise TracError(_("Multi-values fields not supported yet"))
+            field = [field for field in self.fields if field['name'] == name]
+            if field and field[0].get('type') != 'textarea':
+                value = value.strip()
+        self.values[name] = value
+    
     def _fetch(self, name, db=None):
+        if not  self.fields:
+            return
         if not db:
             db = self.env.get_db_cnx()
-        self._fetch_struct_fields(name, db)
-        super(StructuredMilestone, self)._fetch(name, db)
-
-    def _fetch_struct_fields(self, name, db):
+            
         cursor = db.cursor()
-        cursor.execute("SELECT m.started, ms.parent "
-                       "FROM milestone m LEFT OUTER JOIN milestone_struct ms ON m.name=ms.name WHERE m.name=%s", (name,))
-        row = cursor.fetchone()
-        if row:
-            self._old_started = self.started = row[0] and to_datetime(int(row[0])) or None
-            self._old_parent = self.parent= row[1] or None
-        
+        cursor.execute("SELECT name, value "
+                        " FROM milestone_custom"
+                       " WHERE milestone=%s", (name,))
+        self._custom_fields_from_collection(cursor)
+                
+    def _custom_fields_from_collection(self, data):
+        field_names = [f['name'] for f in self.fields]
+        for name, value in data:
+            if name in field_names and value is not None:
+                self.values[name] = value        
+
     def _get_kids(self):
-        if not self._kids and not self._kids_were_fetched:
+        if self._kids is None:
             db = self.env.get_db_cnx()
             cursor = db.cursor()
             cursor.execute("SELECT m.name "
-                           "FROM milestone m, milestone_struct ms WHERE m.name=ms.name AND ms.parent=%s", (self.name,))
+                            " FROM milestone m,"
+                                 " milestone_custom mc"
+                           " WHERE m.name=mc.milestone"
+                             " AND mc.name='parent'"
+                             " AND mc.value=%s", (self.name,))
             self._kids = [StructuredMilestone(self.env, name) for name, in cursor]
-            self._kids_were_fetched = True
         return self._kids
 
-    def _set_kids(self, val):
-        self._kids_were_fetched = True
-        self._kids = val
-
-    def _from_database_row(self, row):
-        self._old_parent = self.parent = row[-1]
-        self._old_started = self.started = row[-2] and to_datetime(int(row[-2])) or None
-        super(StructuredMilestone, self)._from_database(row[0:-2])
     
     def _can_be_closed(self):
-        if self.kids:
-            for kid in self.kids:
+        kids = self.kids
+        if kids:
+            for kid in kids:
                 if not kid.is_completed:
                     return False
         return True
@@ -184,9 +219,10 @@ class StructuredMilestone(Milestone):
             handle_commit = True
 
         cursor = db.cursor()
-        cursor.execute("DELETE FROM milestone_struct WHERE name=%s or parent=%s", (self.name, self.name))
+        cursor.execute("DELETE FROM milestone_custom WHERE milestone=%s", (self.name))
+        cursor.execute("UPDATE milestone_custom SET value=%s WHERE name='parent' AND value=%s", (retarget_to, self.name))
 
-        super(StructuredMilestone, self).delete(retarget_to, author, db)
+        self.milestone.delete(retarget_to, author, db)
         if handle_commit:
             db.commit()
             
@@ -202,10 +238,11 @@ class StructuredMilestone(Milestone):
             db = self.env.get_db_cnx()
             handle_commit = True
 
-        super(StructuredMilestone, self).insert(db)
-        if self.parent:
-            cursor = db.cursor()
-            cursor.execute("INSERT INTO milestone_struct (name,parent) VALUES (%s,%s)", (self.name, self.parent))
+        self.milestone.insert(db)
+        cursor = db.cursor()
+        cursor.executemany("INSERT INTO milestone_custom (milestone,name,value) "
+                           "VALUES (%s,%s,%s)", [(self.name, field['name'], self[field['name']])
+                                                 for field in self.fields])
         if handle_commit:
             db.commit()
             
@@ -222,39 +259,32 @@ class StructuredMilestone(Milestone):
             db = self.env.get_db_cnx()
             handle_commit = True
             
-        _old_name = self._old_name
+        _old_name = self.milestone.name
         
-        old_values = {}
-        for attr_name in ['completed', 'due', 'name', 'parent', 'started']:
-            old_val= getattr(self, '_old_'+attr_name, None)
-            old_values[attr_name]=old_val
-        super(StructuredMilestone, self).update(db)
-        if(self._old_started !=self.started):
-            cursor = db.cursor()
-            cursor.execute("UPDATE milestone SET started=%s WHERE name=%s", (to_timestamp(self.started), self.name))
-            
+        self.milestone.update(db)
+        cursor = db.cursor()
         if self.name!=_old_name:
-            cursor = db.cursor()
-            cursor.execute("UPDATE milestone_struct SET name=%s WHERE name=%s", (self.name, _old_name))
-            cursor.execute("UPDATE milestone_struct SET parent=%s WHERE parent=%s", (self.name, _old_name))
-        self.env.log.debug("Setting parent: new='%s' old='%s'" % (self.parent, self._old_parent))
-        if self.parent or self._old_parent and self.parent!=self._old_parent:
-            cursor = db.cursor()
-            cursor.execute("SELECT * FROM milestone_struct WHERE name=%s and parent=%s", (self.name, self._old_parent))
-            if cursor.fetchone():
-                cursor.execute("UPDATE milestone_struct SET parent=%s WHERE name=%s and parent=%s", (self.parent, self.name, self._old_parent))
-            else:
-                cursor.execute("INSERT INTO milestone_struct VALUES (%s,%s)", (self.name, self.parent))
-        self._old_parent = self.parent
+            cursor.execute("UPDATE milestone_custom SET milestone=%s WHERE name=%s", (self.name, _old_name))
+            cursor.execute("UPDATE milestone_custom SET value=%s WHERE name='parent' AND value=%s", (self.name, _old_name))
+
+        field_names = [f['name'] for f in self.fields]
+        for name in self._old.keys():
+            if name in field_names:
+                cursor.execute("SELECT * FROM milestone_custom " 
+                               "WHERE milestone=%s and name=%s", (self.name, name))
+                if cursor.fetchone():
+                    cursor.execute("UPDATE milestone_custom SET value=%s "
+                                   "WHERE milestone=%s AND name=%s",
+                                   (self[name], self.name, name))
+                else:
+                    cursor.execute("INSERT INTO milestone_custom (milestone,name,"
+                                   "value) VALUES(%s,%s,%s)",
+                                   (self.name, name, self[name]))
 
         if handle_commit:
             db.commit()
-            
-        for attr_name in ['name', 'parent', 'completed','due', 'started']:
-            new_val= getattr(self, attr_name, None)
-            if attr_name in old_values and new_val == old_values[attr_name]:
-                del old_values[attr_name]
-                
+        old_values = self._old
+        self._old={}                
         listeners = IttecoEvnSetup(self.env).change_listeners
         for listener in listeners:
             listener.milestone_changed(self, old_values)
@@ -263,26 +293,29 @@ class StructuredMilestone(Milestone):
     def select(env, include_completed=True, db=None):
         if not db:
             db = env.get_db_cnx()
-        sql = "SELECT m.name,due,completed,description, started, ms.parent \
-                   FROM milestone m LEFT OUTER JOIN milestone_struct ms ON m.name=ms.name "
-        if not include_completed:
-            sql += "WHERE COALESCE(completed,0)=0 "
+            
+        milestones = dict([(milestone.name, milestone) for milestone in Milestone.select(env, include_completed, db)])
+        if milestones:
+            sql = "SELECT milestone, name, value \
+                     FROM milestone_custom m \
+                    WHERE milestone IN (%s)" % (("%s,"*len(milestones))[:-1])
         cursor = db.cursor()
-        cursor.execute(sql)
-        milestones = []
-        for row in cursor:
-            milestone = StructuredMilestone(env)
-            milestone._from_database_row(row)
-            milestones.append(milestone)
-        return StructuredMilestone.reorganize(milestones)
+        cursor.execute(sql, milestones.keys())
+        grouped = partition(((name, value), milestone) for milestone, name, value in cursor)
+        structured_milestones = []
+        for milestone, name_value_paires in grouped.iteritems():
+            structured_milestone = StructuredMilestone(env, milestones[milestone])
+            structured_milestone._custom_fields_from_collection(name_value_paires)
+            structured_milestones.append(structured_milestone)
+        return StructuredMilestone.reorganize(structured_milestones)
            
     @staticmethod
     def reorganize(milestones):
         if not milestones:
             return milestones
-
         for milestone in milestones:
-            milestone.kids = []
+            milestone._kids = []
+
         grouped = partition((milestone, milestone.parent) for milestone in milestones)
         roots = []
         name_to_struct = {}

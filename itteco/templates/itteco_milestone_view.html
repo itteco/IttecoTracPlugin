@@ -2,12 +2,68 @@
       xmlns:py="http://genshi.edgewall.org/"
       xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
     
+    <py:match path="*/head">
+        <head>
+            ${select("*|text()")}
+            <script type="text/javascript" py:if="milestone.exists">
+              jQuery(document).ready(function($) {
+                var actions = $("#action input[name='action']");
+
+                function updateActionFields() {
+                  actions.each(function () {
+                    var $$this = $$(this);
+                    $$this.siblings().find("[id]").enable($$this.checked());
+                    $$this.siblings().filter("[id]").enable($$this.checked());
+                  });
+                }
+                actions.click(updateActionFields);
+                updateActionFields();
+              });
+            </script>
+        </head>
+    </py:match>
+    
+    <div py:def="render_milestones(items)" py:strip="">
+        <ul py:if="items">
+            <li py:for="item in items"><a href="$href.milestone(item.name)" class="item-droppable milestone ${item.completed and 'completed_milestone' or ''}"><span>${item.name}</span><span class="milestone-type">[${item.level['label']}]</span></a>
+            ${render_milestones(item.kids)}
+            </li>
+        </ul>
+    </div>
+
+
+    <py:match path="*/div[@class='info']" once="true">
+        <div class="sub-milestones" py:with="kids = milestone.kids">
+            <ul py:if="kids">
+                ${render_milestones(kids)}
+            </ul>
+        </div>
+        <div class="info">
+        ${select("*|text()")}
+        </div>
+        <div class="sub-tickets" py:if="render_report">
+            <script type="text/javascript">
+                $(document).ready(function(){
+                    $('#milestone-tickets').editableReport(
+                        {
+                            rpcurl: "${href('login','xmlrpc')}",
+                            fields: $fields_config
+                        }
+                    )
+                });
+            </script>
+
+            <xi:include href="itteco_report_fragment.html" />
+            <hr/>
+        </div>
+    </py:match>
+
     <py:match path="*/form[@id='stats']" once="true">     
       <form py:attrs="select('@*')">
         ${select("*|text()")}
         <xi:include href="itteco_roadmap_options.html" />
 	<div class="buttons">
-        	<input type="submit" value="Update" />
+        <input type="submit" value="Update" />
 	</div>
       </form>
       <script type="text/javascript">

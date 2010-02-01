@@ -9,6 +9,7 @@ from trac.core import implements, Component
 from trac.mimeview import Context
 from trac.resource import Resource
 from trac.ticket import TicketSystem
+
 from trac.ticket.model import Type
 from trac.ticket.roadmap import MilestoneModule, RoadmapModule, TicketGroupStats, \
     DefaultTicketGroupStatsProvider, apply_ticket_permissions,get_ticket_stats,milestone_stats_data
@@ -21,8 +22,11 @@ from trac.web.chrome import Chrome, add_link, add_stylesheet, add_warning
 from trac.wiki.formatter import format_to
 
 from itteco.init import IttecoEvnSetup
+from itteco.utils.render import add_jscript
 from itteco.scrum.burndown import IBurndownInfoProvider
+from itteco.ticket.api import MilestoneSystem
 from itteco.ticket.model import StructuredMilestone
+from itteco.ticket.report import IttecoReportModule
 from itteco.ticket.utils import get_fields_by_names, get_tickets_for_milestones
 from itteco.utils import json
 
@@ -33,8 +37,10 @@ def get_tickets_for_structured_milestone(env, db, milestone, field='component', 
     while sub_mils:
         mils.extend(sub_mils)
         cursor = db.cursor()
-        cursor.execute("SELECT name FROM milestone_struct"+\
-            " WHERE parent  IN (%s) " % ("%s,"*len(sub_mils))[:-1], sub_mils)
+        cursor.execute("SELECT milestone"
+                        " FROM milestone_custom"
+                       " WHERE name='parent'"
+                         " AND value IN (%s) " % ("%s,"*len(sub_mils))[:-1], sub_mils)
         sub_mils = [sub_milestone for sub_milestone, in cursor if sub_milestone not in mils]
     return get_tickets_for_milestones(db, mils, get_fields_by_names(env, field), types)
 
@@ -117,34 +123,6 @@ class SelectionTicketGroupStatsProvider(Component):
 
 
 class IttecoMilestoneModule(MilestoneModule):
-    implements(ITemplateStreamFilter)
-
-    #ITemplateStreamFilter methods
-    def filter_stream(self, req, method, filename, stream, data):
-        self.env.log.debug('data="%s"'% data.get('action'))
-        if req.path_info.startswith('/milestone') \
-            and 'edit'==req.args.get('action') and 'itteco_sprint_start.html'!=filename:
-            levels_len = len(IttecoEvnSetup(self.env).milestone_levels)
-            mil = data.get('milestone')
-            if mil and ( levels_len<2 or mil.level['index']==levels_len-2):
-                chrome = Chrome(self.env)
-                stream |=Transformer('//head').append(tag.script("""/*<![CDATA[*/
-                  jQuery(document).ready(function($) {
-                    function updateStartedDate() {
-                      var checked = $("#started").checked();
-                      $("#starteddate").enable(checked);
-                    }
-                    $("#started").click(updateStartedDate);
-                    updateStartedDate();
-                  });
-                /*]]>*/
-                """))
-                stream |= Transformer('//*[@id="edit"]//fieldset/legend').after(
-                    chrome.render_template(req, 'itteco_sprint_start.html', 
-                        {'milestone': mil,
-                         'date_hint': get_date_format_hint()}, fragment=True))
-
-        return  stream
 
     # IRequestHandler methods
     def process_request(self, req):
@@ -163,10 +141,10 @@ class IttecoMilestoneModule(MilestoneModule):
                     req.redirect(req.href.milestone(milestone.name))
                 else:
                     req.redirect(req.href.roadmap())
-            elif action == 'edit':
-                return self._do_save(req, db, milestone)
             elif action == 'delete':
                 self._do_delete(req, db, milestone)
+            elif action == 'edit':
+                return self._do_save(req, db, milestone)
         elif action in ('new', 'edit'):
             return self._render_editor(req, db, milestone)
         elif action == 'delete':
@@ -183,18 +161,39 @@ class IttecoMilestoneModule(MilestoneModule):
         perm = milestone.exists and 'MILESTONE_MODIFY' or 'MILESTONE_CREATE'
         req.perm(milestone.resource).require(perm)
 
+        self._populate_custom_fields(req, milestone)
+        action = req.args.get('workflow_action')
+        actions = MilestoneSystem(self.env).get_available_actions(
+            req, milestone)
+            
+        if action not in actions:
+            raise TracError(_('Invalid action "%(name)s"', name=action))
+            # (this should never happen in normal situations)
+        field_changes, problems = self.get_milestone_changes(req, milestone, action)
+        if problems:
+            for problem in problems:
+                add_warning(req, problem)
+                add_warning(req,
+                            tag(tag.p('Please review your configuration, '
+                                      'probably starting with'),
+                                tag.pre('[trac]\nworkflow = ...\n'),
+                                tag.p('in your ', tag.tt('trac.ini'), '.'))
+                            )
+        for key in field_changes:
+            milestone[key] = field_changes[key]['new']
+
         old_name = milestone.name
         new_name = req.args.get('name')
-        new_parent = req.args.get('parent')
+        new_parent_name = req.args.get('parent')
         warnings = []
         def warn(msg):
             add_warning(req, msg)
             warnings.append(msg)
             
-        if new_parent in (old_name, new_name):
+        if new_parent_name in (old_name, new_name):
             warn('Milestone "%s" cannot be parent for itself.,Please, give it another thought' % new_name)
         else:
-            milestone.parent = new_parent
+            milestone['parent'] = new_parent_name
             
         started = req.args.get('starteddate', '')
         if 'started' in req.args:
@@ -205,17 +204,82 @@ class IttecoMilestoneModule(MilestoneModule):
             started = None
         milestone.started = started
 
-        results = MilestoneModule._do_save(self, req, db, milestone)
         if warnings:
             return self._render_editor(req, db, milestone)
         else:
+            results = MilestoneModule._do_save(self, req, db, milestone)
             return  results
+            
+    def get_milestone_changes(self, req, milestone, selected_action):
+        """Returns a dictionary of field changes.
+        
+        The field changes are represented as:
+        `{field: {'old': oldvalue, 'new': newvalue, 'by': what}, ...}`
+        """
+        # Start with user changes
+        field_changes = {}
+        for field, value in milestone._old.iteritems():
+            field_changes[field] = {'old': value,
+                                    'new': milestone[field],
+                                    'by':'user'}
+        # Apply controller changes corresponding to the selected action
+        problems = []
+        for controller in self._get_action_controllers(req, milestone,
+                                                       selected_action):
+            cname = controller.__class__.__name__
+            action_changes = controller.get_milestone_changes(req, milestone,
+                                                           selected_action)
+            for key in action_changes.keys():
+                old = milestone[key]
+                new = action_changes[key]
+                # Check for conflicting changes between controllers
+                if key in field_changes:
+                    last_new = field_changes[key]['new']
+                    last_by = field_changes[key]['by'] 
+                    if last_new != new and last_by:
+                        problems.append('%s changed "%s" to "%s", '
+                                        'but %s changed it to "%s".' %
+                                        (cname, key, new, last_by, last_new))
+                field_changes[key] = {'old': old, 'new': new, 'by': cname}
+        # Detect non-changes
+        for key, item in field_changes.items():
+            if item['old'] == item['new']:
+                del field_changes[key]
+        return field_changes, problems
 
     def _render_confirm(self, req, db, milestone):
         return self._delegate_call(req, db, milestone, MilestoneModule._render_confirm)
 
     def _render_editor(self, req, db, milestone):
-        return self._delegate_call(req, db, milestone, MilestoneModule._render_editor)
+        template, data, content_type = self._delegate_call(req, db, milestone, MilestoneModule._render_editor)
+        selected_action = req.args.get('workflow_action')
+        
+        action_controls = []
+        sorted_actions = MilestoneSystem(self.env).get_available_actions(req,
+                                                                      milestone)
+        for action in sorted_actions:
+            first_label = None
+            hints = []
+            widgets = []
+            for controller in self._get_action_controllers(req, milestone,
+                                                           action):
+                label, widget, hint = controller.render_milestone_action_control(
+                    req, milestone, action)
+                if not first_label:
+                    first_label = label
+                widgets.append(widget)
+                hints.append(hint)
+            action_controls.append((action, first_label, tag(widgets), hints))
+        if not selected_action:
+            selected_action = action_controls[0][0]
+        data.update(
+            {
+                'workflow_action': selected_action,
+                'action_controls' : action_controls,
+                'structured_milestones' : data['milestones']
+            }
+        )
+        return 'itteco_milestone_edit.html', data, content_type
         
     def _delegate_call(self, req, db, milestone, func):
         template, data, content_type = func(self, req, db, milestone)
@@ -313,9 +377,35 @@ class IttecoMilestoneModule(MilestoneModule):
             'active': not selected_types or str(tkt.value) in selected_types} 
             for tkt in Type.select(self.env)]        
         calculate_on = IttecoRoadmapModule(self.env).get_statistics_source(calc_on)
-        data.update({'tkt_types': tkt_types,'calc_on': calculate_on})
+        
+        data.update(
+            {
+                'tkt_types': tkt_types,
+                'calc_on': calculate_on,
+            }
+        )
+        
+        self._add_tickets_report_data(milestone, req, data)
+        
         return 'itteco_milestone_view.html', data, None
         
+    def _add_tickets_report_data(self, milestone, req, data):
+        tickets_report = MilestoneSystem(self.env).tickets_report
+        if tickets_report:
+            req.args['MILESTONE'] = milestone.name
+            req.args['id']=tickets_report
+            report_data = IttecoReportModule(self.env).get_report_data(req, tickets_report)
+            self.env.log.debug('report_data="%s"' % (report_data,))
+            data.update(report_data)
+            
+            add_jscript(req, 'stuff/plugins/jquery.rpc.js')
+            add_jscript(req, 'stuff/ui/plugins/jquery.jeditable.js')
+            add_jscript(req, 'editable_report.js')
+            add_stylesheet(req, 'itteco/css/report.css')
+            data['fields_config'] = IttecoReportModule(self.env).fields_dict(data.get('header_groups',[]))
+        data['render_report'] = tickets_report or None
+            
+
     # ITimelineEventProvider methods
     def get_timeline_events(self, req, start, stop, filters):
         if 'milestone' in filters:
@@ -323,8 +413,12 @@ class IttecoMilestoneModule(MilestoneModule):
             db = self.env.get_db_cnx()
             cursor = db.cursor()
             # TODO: creation and (later) modifications should also be reported
-            cursor.execute("SELECT started,name,description FROM milestone "
-                           "WHERE started>=%s AND started<=%s ",
+            cursor.execute("SELECT %s, m.name, m.description"
+                            " FROM milestone m,"
+                                 " milestone_custom mc"
+                           " WHERE m.name = mc.milestone"
+                             " AND mc.name='started'"
+                             " AND %s>=%%s AND %s<=%%s " % (db.cast('mc.value', 'int')),
                            (to_timestamp(start), to_timestamp(stop)))
             for started, name, description in cursor:
                 milestone = milestone_realm(id=name)
@@ -349,7 +443,21 @@ class IttecoMilestoneModule(MilestoneModule):
         elif field == 'description':
             return format_to(self.env, None, context(resource=milestone),
                              description)
-        
+                             
+    def _get_action_controllers(self, req, milestone, action):
+        """Generator yielding the controllers handling the given `action`"""
+        for controller in MilestoneSystem(self.env).action_controllers:
+            actions = [a for w,a in
+                       controller.get_milestone_actions(req, milestone)]
+            if action in actions:
+                yield controller
+                
+    def _populate_custom_fields(self, req, milestone):
+        fields = req.args
+        for k,v in fields.items():
+            if k.startswith('field_'):
+                milestone[k[6:]] = v
+            
 class IttecoRoadmapModule(RoadmapModule):
     _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])   
     def get_statistics_source(self, active = None):

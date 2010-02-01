@@ -39,21 +39,24 @@ class IttecoReportModule(Component):
                     kw['src'] = link_builder(map_script(path))
                 return tag.script(content , **kw)
 
-            stream |= Transformer("//head").append(
-                tag(
-                    script_tag('stuff/ui/plugins/jquery.jeditable.js'),
-                    script_tag("editable_report.js"),
-                    script_tag(
-                        content=
-                        "$(document).ready(function(){"+
-                            "$('#main').editableReport("+
-                                "{"+
-                                    "rpcurl: '"+req.href('login','xmlrpc')+"',"+
-                                    "fields: "+self._fields_dict(data.get('header_groups',[]))+"})"+
-                        "});"
+            stream |= Transformer("//head").prepend(
+                        tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css"))
+                ).append(
+                    tag(
+                        script_tag('stuff/plugins/jquery.rpc.js'),
+                        script_tag('stuff/ui/plugins/jquery.jeditable.js'),
+                        script_tag("editable_report.js"),
+                        script_tag(
+                            content=
+                            "$(document).ready(function(){"+
+                                "$('#main').editableReport("+
+                                    "{"+
+                                        "rpcurl: '"+req.href('login','xmlrpc')+"',"+
+                                        "fields: "+self.fields_dict(data.get('header_groups',[]))+"})"+
+                            "});"
+                        )
                     )
                 )
-            )
 
             if req.args and req.args.get('exec_groups'):
                 try:
@@ -71,7 +74,6 @@ class IttecoReportModule(Component):
                                 script_tag("stuff/ui/ui.droppable.js"),
                                 script_tag("stuff/ui/ui.resizable.js"),
                                 script_tag('stuff/ui/plugins/jquery.colorbox.js'),
-                                script_tag('stuff/plugins/jquery.rpc.js'),
                                 script_tag('custom_select.js'),
                                 script_tag("report.js")
                             )
@@ -213,7 +215,7 @@ class IttecoReportModule(Component):
         self.env.log.debug('itteco-report-config=%s' % config)
         return config
     
-    def _fields_dict(self, field_groups):    
+    def fields_dict(self, field_groups):
         res = '{'
         config = self.fields_config()
         first = True
@@ -232,6 +234,12 @@ class IttecoReportModule(Component):
                 res += fname +':' + str(cfg).replace("u'", "'")
         res += '}'
         return res
+        
+    def get_report_data(self, req, id):
+        db = self.env.get_db_cnx()
+        _template, data, _content_type = ReportModule(self.env)._render_view(req, db, id)
+        return data
+    
 def _render_conrol_panel():
     return tag.div(
       tag.span(

@@ -61,6 +61,7 @@ def do_upgrade(env, db, installed_version):
     upgrade_to_0_2_0(env, db, installed_version)
     upgrade_to_0_2_2(env, db, installed_version)
     upgrade_to_0_2_3(env, db, installed_version)
+    upgrade_to_0_2_4(env, db, installed_version)
     return True
 
 def upgrade_to_0_2_0(env, db, installed_version):
@@ -134,3 +135,33 @@ def upgrade_to_0_2_3(env, db, installed_version):
     comp_config.set('tracrpc.*', 'enabled')
 
     env.config.save()
+    
+def upgrade_to_0_2_4(env, db, installed_version):
+    if installed_version>=[0,2,4]:
+        return True
+
+    milestones_shema_ext = [
+        Table('milestone_change', key=('milestone', 'time', 'field'))[
+            Column('milestone'),
+            Column('time', type='int'),
+            Column('author'),
+            Column('field'),
+            Column('oldvalue'),
+            Column('newvalue'),
+            Index(['milestone']),
+            Index(['time'])],
+
+        Table('milestone_custom', key=('milestone', 'name'))[
+            Column('milestone'),
+            Column('name'),
+            Column('value')]
+    ]
+
+    db = db or env.get_db_cnx()
+    cursor = db.cursor()
+    db_backend, _ = DatabaseManager(env)._get_connector()
+    for table in milestones_shema_ext:
+        for stmt in db_backend.to_sql(table):
+            cursor.execute(stmt)
+
+    return True
