@@ -5,7 +5,8 @@ except ImportError:
     import dummy_threading as threading
 
 from trac.core import implements, Interface, Component
-from trac.config import OrderedExtensionsOption, IntOption
+from trac.config import OrderedExtensionsOption, IntOption, ListOption
+from trac.perm import IPermissionPolicy
 
 class IMilestoneActionController(Interface):
     """Extension point interface for components willing to participate
@@ -105,10 +106,16 @@ class MilestoneSystem(Component):
     action_controllers = OrderedExtensionsOption('itteco-milestone', 'workflow',
         IMilestoneActionController, default='ConfigurableMilestoneWorkflow',
         include_missing=False,
-        doc="""Ordered list of workflow controllers to use for milestone actions.""")
+        doc="""Ordered list of workflow controllers to use for milestone actions. Reserved for future use.""")
 
     tickets_report = IntOption('itteco-milestone', 'tickets_report',
-        doc="""Ordered list of workflow controllers to use for milestone actions.""")
+        doc="""The number of the report that is to be rendered in in milestone editor.""")
+        
+    starting_action = ListOption('itteco-milestone', 'starting_action', 'start,reassign',
+        doc="""List of the actions that mark milestone as started.""")
+
+    completing_action = ListOption('itteco-milestone', 'completing_action', 'finish,resolve',
+        doc="""List of the actions that mark milestone as started.""")
         
     _fields = None
     _custom_fields = None
@@ -119,7 +126,6 @@ class MilestoneSystem(Component):
         self._fields_lock = threading.RLock()
 
     # Public API
-
     def get_available_actions(self, req, milestone):
         """Returns a sorted list of available actions"""
         # The list should not have duplicates.
@@ -165,12 +171,14 @@ class MilestoneSystem(Component):
             self._fields_lock.release()
 
     def _get_milestone_fields(self):
-
         db = self.env.get_db_cnx()
         fields = [
-            {'name' : 'started', 'type' : 'text', 'label' : 'Started At', 'hidden' : True},
-            {'name' : 'parent',  'type' : 'text', 'label' : 'Parent', 'hidden' : True},
-            {'name' : 'owner',  'type' : 'text', 'label' : 'Owner', 'hidden' : True},
+            {'name': 'summary', 'type': 'text', 'label': 'Summary'},
+            {'name': 'description', 'type': 'textarea', 'label': 'Description'},
+            {'name' : 'started', 'type' : 'text', 'label' : 'Started At', 'skip' : True, 'custom' : True},
+            {'name' : 'type', 'type' : 'text', 'label' : 'TypesAt', 'skip' : True},
+            {'name' : 'milestone',  'type' : 'text', 'label' : 'Parent', 'options' : []},
+            {'name' : 'owner',  'type' : 'text', 'label' : 'Owner'},
             {
                 'name'   : 'status',  
                 'type'   : 'select', 
@@ -220,6 +228,7 @@ class MilestoneSystem(Component):
             field = {
                 'name': name,
                 'type': config.get(name),
+                'custom': True,
                 'order': config.getint(name + '.order', 0),
                 'label': config.get(name + '.label') or name.capitalize(),
                 'value': config.get(name + '.value', '')
@@ -239,5 +248,51 @@ class MilestoneSystem(Component):
 
         fields.sort(lambda x, y: cmp(x['order'], y['order']))
         return fields
+        
+class HideMilestoneTicketPolicy(Component):
+    """ Component that hides tickets of type $milestone$ from none TRAC_ADMIN roles """
+    
+    implements(IMilestoneChangeListener, IPermissionPolicy)
+    
+    def __init__(self):
+        self._cache = None
+        self._cache_lock = threading.RLock()
+    
+    def milestone_created(self, milestone):
+        self.invalidate()
 
+    def milestone_changed(self, milestone, old_values):
+        self.invalidate()
 
+    def milestone_deleted(self, milestone):
+        self.invalidate()
+        
+    def invalidate(self):
+        self._cache_lock.acquire()
+        try:
+            self._cache = None
+        finally:
+            self._cache_lock.release()
+
+    def get_milestone_tickets(self):
+        """Returns the list of tickets holding milestone collaboration info."""
+        if self._cache is None:
+            self._cache_lock.acquire()
+            try:
+                if self._cache is None:
+                    self._cache = self._get_milestone_tickets()
+            finally:
+                self._cache_lock.release()
+        return self._cache[:]
+    
+    def _get_milestone_tickets(self):
+        db = self.env.get_db_cnx()
+        cursor = db.cursor()
+        cursor.execute("SELECT id FROM ticket WHERE type='$milestone$'");
+        return [int(ticket) for ticket, in cursor]
+
+    def check_permission(self, action, username, resource, perm):
+        if not resource or not resource.id \
+            or action not in ['TICKET_VIEW'] or 'TRAC_ADMIN' in perm:
+            return
+        return int(resource.id) not in self.get_milestone_tickets()

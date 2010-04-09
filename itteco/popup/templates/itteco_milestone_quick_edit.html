@@ -16,11 +16,11 @@
         }
         function setupCallback(root){
             if(window.popup_context && window.popup_context.setup){
-                window.popup_context.setup(root);
+                popup_context.setup(root);
             }
         }
         
-        function createTicketAttributes(form){
+        function createAttributes(form){
             var attrs = {}, arr = $(form).serializeArray();
             
             for(i in arr){
@@ -29,7 +29,6 @@
                     attrs[field.name.substr(6)] = field.value;
                 }
             }
-            
             return attrs;
         }
 
@@ -40,42 +39,30 @@
             }
         }
         
-        function handleTicketResp(resp){
-            var tkt = resp.result[3];
-            tkt.id = resp.result[0];
-            notify(tkt);
+        function handleMilestoneResp(resp){
+            notify(resp.result);
         }
 
-        function updateTicket(id, attrs){
-            rpc.ticket.update(
-                handleTicketResp,
-                Number(id),
-                '',
+        function updateMilestone(id, attrs){
+            rpc.structured_milestone.update(
+                handleMilestoneResp,
+                id,
                 attrs
             );
         }
 
-        function createTicket(attrs){
-            rpc.ticket.create(
-                function(resp){
-                    var id = resp.result;
-                    $(":input[name='ticket']", root).val(id),
-                    rpc.ticket.get(
-                        handleTicketResp,
-                        id
-                    );                    
-                },                
-                '',//summary
-                '',//description
+        function createMilestone(attrs){
+            rpc.structured_milestone.create(
+                handleMilestoneResp,                
                 attrs
             );
         }
 
         function save(id, attrs){
             if(id==''){
-                createTicket(attrs);
+                createMilestone(attrs);
             }else{
-                updateTicket(id, attrs);
+                updateMilestone(id, attrs);
             }
         }
         function bindHandlers(){
@@ -83,8 +70,8 @@
             $('form', root).submit(function(){
                 try{
                     save(
-                        $(":input[name='ticket']", root).val(),
-                        createTicketAttributes(this)
+                        $(":input[name='milestone_name']", root).val(),
+                        createAttributes(this)
                     );
                 }catch(e){log('action-failed with exception', e);}
                 return false;
@@ -126,7 +113,7 @@
         <div class="p-header">
         	<div class="p-header-bl">
             	<div class="p-header-br">
-	        		<h1>Ticket #${obj.id}</h1>
+	        		<h1>Milestone ${milestone.name}</h1>
                 </div>
         	</div>
         </div>
@@ -134,9 +121,8 @@
 		<!-- content -->
         <div id="popup-ticket-editor" class="p-content">
 			<form onreset="$('.custom_drop_down',this).triggerHandler('reset')"
-				py:with="editable=obj.id=='new' or 'TICKET_APPEND' in perm('ticket', obj.id) or 'TICKET_CHGPROP' in perm('ticket', obj.id) or False; 
-				fields = cfg.fields or obj.type and ticket_type_rendering_config[obj.type]['fields'] or [];">
-
+				py:with="editable=obj.id=='new' or 'MILESTONE_MODIFY' in perm('milestone', milestone.name) or False; 
+				fields = cfg.fields;">
 				<!-- form -->
 				<div class="s-form p-form-ticket-edit">
 					<div class="s-form-row" py:for="field in fields">
@@ -144,7 +130,7 @@
 						<div class="s-form-cell ">${render_field_editor(obj, field)}</div>
 					</div>
 					<div class="s-form-row">
-						<div class="s-form-cell s-form-cell-primary s-form-label"><label for="field-milestone">Milestone</label></div>
+						<div class="s-form-cell s-form-cell-primary s-form-label"><label for="field-milestone">Belongs to</label></div>
 						<div class="s-form-cell "><xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></div>
 					</div>
 					<div class="s-form-row" py:if="obj and obj.id!='new' and cfg.workflow">
@@ -158,11 +144,11 @@
 							</div>
 						</div>
 					</div>
-					<input type="hidden" name="ticket" value="${obj.id!='new' and obj.id or None}"/>      
+					<input type="hidden" name="milestone_name" value="${milestone.name}"/>
 				</div>
 				<div class="s-buttons p-footer">
 					<div class="s-buttons-item">
-						<a href="${obj.id=='new' and href.newticket() or href.ticket(obj.id)}" class="s-button-link s-icon s-icon-edit">Switch to full editor</a>
+						<a href="${milestone.exists and href.milestone(milestone.name) or href.milestone()}" class="s-button-link s-icon s-icon-edit">Switch to full editor</a>
 					</div>
 					<div class="s-buttons-item">
 						<input type="submit" class="s-button s-button-cancel" value="Cancel" name="submit" />

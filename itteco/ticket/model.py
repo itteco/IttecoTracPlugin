@@ -16,6 +16,8 @@ _sql_insert_wiki = "INSERT into ticket_custom(value, name, ticket) VALUES(%s, 'w
 _sql_update_wiki = "UPDATE ticket_custom SET value=%s WHERE ticket=%s AND name='wiki_ref'"
 _sql_delete_wiki = "DELETE FROM ticket_custom WHERE ticket=%s AND name='wiki_ref'"
 
+milestone_ticket_type = "$milestone$"
+
 class TicketLinks(object):
     """A model for the ticket links used for tickets tracebility."""    
 
@@ -104,15 +106,18 @@ class StructuredMilestone(object):
     _level = None
     def __init__(self, env, milestone=None, db=None):
         self.env = env
-        self.fields = MilestoneSystem(self.env).get_milestone_fields()
-        self.values = self._old = {}
-
         if not isinstance(milestone, Milestone):
             milestone = Milestone(env, milestone)
-            if milestone.exists:
-                self._fetch(milestone.name, db)
             
         self.milestone = milestone
+        self.ticket = Ticket(self.env)
+        self.ticket.fields = MilestoneSystem(self.env).get_milestone_fields()
+        self.ticket.values = {}
+        self.ticket['summary'] = milestone.name        
+        self.ticket['type'] = milestone_ticket_type
+        
+        if self.exists:
+            self._fetch(milestone.name, db)
     
     def __getattribute__(self, name):
         if name in object.__getattribute__(self, "__proxy_attrs__"):
@@ -125,48 +130,26 @@ class StructuredMilestone(object):
         else:
             self.__dict__[name]=value
     
-    parent = property(fget= lambda self: self.values.get('parent'))
-    is_started = property(fget=lambda self: self.values.get('started') is not None)
+    parent = property(fget= lambda self: self.ticket.values.get('milestone'))
+    is_started = property(fget=lambda self: self.ticket.values.get('started') is not None)
     level = property(fget = lambda self: self._get_level(), fset = lambda self, val: self._set_level(val))
     can_be_closed = property(lambda self: self._can_be_closed())
     kids = property (lambda self: self._get_kids())
-
-    def __getitem__(self, name):
-        return self.values.get(name)
-
-    def __setitem__(self, name, value):
-        """Log ticket modifications so the table ticket_change can be updated"""
-        if name in self.values and self.values[name] == value:
-            return
-        if name not in self._old: # Changed field
-            self._old[name] = self.values.get(name)
-        elif self._old[name] == value: # Change of field reverted
-            del self._old[name]
-        if value:
-            if isinstance(value, list):
-                raise TracError(_("Multi-values fields not supported yet"))
-            field = [field for field in self.fields if field['name'] == name]
-            if field and field[0].get('type') != 'textarea':
-                value = value.strip()
-        self.values[name] = value
     
     def _fetch(self, name, db=None):
-        if not  self.fields:
-            return
         if not db:
             db = self.env.get_db_cnx()
             
         cursor = db.cursor()
-        cursor.execute("SELECT name, value "
-                        " FROM milestone_custom"
-                       " WHERE milestone=%s", (name,))
-        self._custom_fields_from_collection(cursor)
-                
-    def _custom_fields_from_collection(self, data):
-        field_names = [f['name'] for f in self.fields]
-        for name, value in data:
-            if name in field_names and value is not None:
-                self.values[name] = value        
+        cursor.execute("SELECT id"
+                        " FROM ticket"
+                       " WHERE summary=%s"
+                         " AND type=%s", (name, milestone_ticket_type))
+        row = cursor.fetchone()
+        if not row:
+            raise ResourceNotFound('Associated Ticket %s does not exist.' % name,
+                                   'Invalid Milestone State')
+        self.ticket._fetch_ticket(row[0], db)
 
     def _get_kids(self):
         if self._kids is None:
@@ -174,10 +157,10 @@ class StructuredMilestone(object):
             cursor = db.cursor()
             cursor.execute("SELECT m.name "
                             " FROM milestone m,"
-                                 " milestone_custom mc"
-                           " WHERE m.name=mc.milestone"
-                             " AND mc.name='parent'"
-                             " AND mc.value=%s", (self.name,))
+                                 " ticket t"
+                           " WHERE m.name=t.summary"
+                             " AND t.milestone=%s"
+                             " AND t.type=%s", (self.name, milestone_ticket_type))
             self._kids = [StructuredMilestone(self.env, name) for name, in cursor]
         return self._kids
 
@@ -218,11 +201,8 @@ class StructuredMilestone(object):
             db = self.env.get_db_cnx()
             handle_commit = True
 
-        cursor = db.cursor()
-        cursor.execute("DELETE FROM milestone_custom WHERE milestone=%s", (self.name))
-        cursor.execute("UPDATE milestone_custom SET value=%s WHERE name='parent' AND value=%s", (retarget_to, self.name))
-
         self.milestone.delete(retarget_to, author, db)
+        self.ticket.delete(db)
         if handle_commit:
             db.commit()
             
@@ -239,10 +219,7 @@ class StructuredMilestone(object):
             handle_commit = True
 
         self.milestone.insert(db)
-        cursor = db.cursor()
-        cursor.executemany("INSERT INTO milestone_custom (milestone,name,value) "
-                           "VALUES (%s,%s,%s)", [(self.name, field['name'], self[field['name']])
-                                                 for field in self.fields])
+        self.ticket.insert(db=db)
         if handle_commit:
             db.commit()
             
@@ -250,41 +227,21 @@ class StructuredMilestone(object):
         for listener in listeners:
             listener.milestone_created(self)
 
-
-    def update(self, db=None):
-        self.env.log.debug("Updating '%s' milestone" %self)
+    def save_changes(self, author, comment, when=None, db=None, cnum=''):
         assert self.name, 'Cannot update milestone with no name'
         handle_commit = False
         if not db:
             db = self.env.get_db_cnx()
             handle_commit = True
-            
-        _old_name = self.milestone.name
-        
+        old_values =  self.ticket._old
+                
         self.milestone.update(db)
-        cursor = db.cursor()
-        if self.name!=_old_name:
-            cursor.execute("UPDATE milestone_custom SET milestone=%s WHERE name=%s", (self.name, _old_name))
-            cursor.execute("UPDATE milestone_custom SET value=%s WHERE name='parent' AND value=%s", (self.name, _old_name))
-
-        field_names = [f['name'] for f in self.fields]
-        for name in self._old.keys():
-            if name in field_names:
-                cursor.execute("SELECT * FROM milestone_custom " 
-                               "WHERE milestone=%s and name=%s", (self.name, name))
-                if cursor.fetchone():
-                    cursor.execute("UPDATE milestone_custom SET value=%s "
-                                   "WHERE milestone=%s AND name=%s",
-                                   (self[name], self.name, name))
-                else:
-                    cursor.execute("INSERT INTO milestone_custom (milestone,name,"
-                                   "value) VALUES(%s,%s,%s)",
-                                   (self.name, name, self[name]))
-
+        self.ticket.save_changes(author, comment, when, db, cnum)
+        
         if handle_commit:
             db.commit()
-        old_values = self._old
-        self._old={}                
+            
+        old_values['name'] = self.name
         listeners = IttecoEvnSetup(self.env).change_listeners
         for listener in listeners:
             listener.milestone_changed(self, old_values)
@@ -294,20 +251,9 @@ class StructuredMilestone(object):
         if not db:
             db = env.get_db_cnx()
             
-        milestones = dict([(milestone.name, milestone) for milestone in Milestone.select(env, include_completed, db)])
-        if milestones:
-            sql = "SELECT milestone, name, value \
-                     FROM milestone_custom m \
-                    WHERE milestone IN (%s)" % (("%s,"*len(milestones))[:-1])
-        cursor = db.cursor()
-        cursor.execute(sql, milestones.keys())
-        grouped = partition(((name, value), milestone) for milestone, name, value in cursor)
-        structured_milestones = []
-        for milestone, name_value_paires in grouped.iteritems():
-            structured_milestone = StructuredMilestone(env, milestones[milestone])
-            structured_milestone._custom_fields_from_collection(name_value_paires)
-            structured_milestones.append(structured_milestone)
-        return StructuredMilestone.reorganize(structured_milestones)
+        milestones = [ StructuredMilestone(env, milestone) \
+                        for milestone in Milestone.select(env, include_completed, db)]
+        return StructuredMilestone.reorganize(milestones)
            
     @staticmethod
     def reorganize(milestones):

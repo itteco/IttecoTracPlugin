@@ -30,3 +30,11 @@ def map_script(script, debug=False):
         prefix = prefix+'debug/'
         sufix = '.js'
     return prefix+script[:-3]+sufix
+
+def js_encode(obj, extra=None):
+    if isinstance(obj, dict):
+        extra_vals = extra and [extra] or []
+        return "{%s}" % ",".join(["'%s':%s" % (i, js_encode(obj[i])) for i in obj]+extra_vals)
+    elif isinstance(obj, list) or isinstance(obj, tuple):
+        return "[%s]" % ",".join(["%s" % js_encode(i) for i in obj])
+    return "'%s'" % obj

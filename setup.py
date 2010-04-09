@@ -18,6 +18,7 @@ setup(
     package_data = {
         'itteco': [
             'templates/*',
+            'calendar/templates/*',
             'popup/templates/*',
             'htdocs/charts/amstock/amstock.swf',
             'htdocs/css/*.css',
@@ -49,6 +50,7 @@ setup(
         'itteco.ticket.roadmap = itteco.ticket.roadmap',
         'itteco.ticket.web_ui = itteco.ticket.web_ui',
         'itteco.ticket.workflow = itteco.ticket.workflow',
+        'itteco.timeline.web_ui = itteco.timeline.web_ui',
         'itteco.calendar.web_ui = itteco.calendar.web_ui',
         'itteco.popup.web_ui = itteco.popup.web_ui',
         'itteco.calendar.api = itteco.calendar.api',

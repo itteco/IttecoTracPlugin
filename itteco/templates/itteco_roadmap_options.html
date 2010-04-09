@@ -3,9 +3,9 @@
       xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
 
 
-<fieldset><legend>Include tickets of type</legend>
-    <div py:for="t in tkt_types">
-        <label><input type="checkbox" name="tkt_type" value="${t.index}" checked="${t.active and 'checked' or None}"/>
+<fieldset><legend>Include tickets</legend>
+    <div py:for="t in ticket_groups">
+        <label><input type="radio" name="ticket_group" value="${t.index}" checked="${t.active and 'checked' or None}"/>
         ${t.label}
         </label>
     </div>

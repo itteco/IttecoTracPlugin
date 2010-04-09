@@ -2,28 +2,6 @@ body{
     background: url('./../images/droppable-hover.png') no-repeat;
     background-attachment: fixed;
 }
-#dropbox {
-	font-size: 0.8em;
-	font-size-adjust: none;
-	font-stretch: normal;
-	-x-system-font: none;
-    background-color: transparent;
-	border-top: 1px solid #b3b38d;
-	border-left: 1px solid #b3b38d;
-    border-right: 1px solid #72724c;
-	border-bottom: 1px solid #72724c;
-	color: #56562b;
-    
-	line-height: normal;
-	margin-bottom: 10px;
-	padding: 1px;
-    position:fixed;
-    width: 290px;    
-    top: 150px; 
-    right: -1%;
-    overflow: hidden;
-    z-index: 100;
-}
 .link-expanded, .link-collapsed {
 	display: inline-block;
     height: 13px;
@@ -41,28 +19,6 @@ body{
 	background: url(./../images/icon_collapsed.png) no-repeat 0 4px;
 	width: 10px;
 }
-#dropbox .control-panel{background-color: #E3E3E3; font-size: 1.2em; opacity: 0.9}
-#dropbox .content{
-    background-color: #D1D1D1; 
-    font-size: 1.3em;
-    font-weight: bolder;
-    margin: 0px;
-    opacity: 0.8;
-}
-#dropbox .content .odd{ 
-    background: #D1D1D1;
-    border-color: #ddd;
-    color: #444;
-   
-    padding-top: 2px;
-    padding-right: 1px;
-    padding-left: 1px;
-    padding-bottom: 1px;
-}
-
-#dropbox .content .even{ background: #E3E3E3;  border-color: #ccc; color: #333}
-
-#dropbox .content .numrows{font-size: 0.8em; font-weight: normal;}
 .droppable-active {
 	background-color: white;
 }

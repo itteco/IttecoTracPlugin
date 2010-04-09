@@ -1,9 +1,15 @@
 from datetime import datetime
+import re
 
-from trac.core import Component, implements
+from trac.core import *
+from trac.attachment import Attachment
 from trac.resource import Resource
-from trac.ticket.model import Ticket
+from trac.search.api import ISearchSource
+from trac.search.web_ui import SearchModule
+from trac.ticket.web_ui import TicketModule
+from trac.ticket.model import Ticket, Type
 from trac.util.datefmt import FixedOffset, format_datetime, parse_date, utc, to_timestamp
+from trac.util.text import to_unicode
 
 from tracrpc.api import IXMLRPCHandler
 
@@ -163,6 +169,8 @@ class TicketConfigRPC(Component):
 
     implements(IXMLRPCHandler)
 
+    search_sources = ExtensionPoint(ISearchSource)
+
     # IXMLRPCHandler methods
     def xmlrpc_namespace(self):
         return 'ticketconfig'
@@ -171,6 +179,8 @@ class TicketConfigRPC(Component):
         yield (None, ((dict,),), self.defaults)
         yield (None, ((dict, int, int), (dict, int, int, int)), self.trace)
         yield (None, ((list,),),  self.my_active_tickets)
+        yield (None, ((list, str),(list, str, list),),  self.references_search)
+        yield (None, ((dict, list, str),),  self.apply_preset)
 
     def defaults(self, req):
         """ Returns dictionary of the default field values"""
@@ -206,4 +216,104 @@ class TicketConfigRPC(Component):
              WHERE owner = %%s AND status NOT IN (%s)""" % ("%s," * len(final_statuses))[:-1],
            [user,]+final_statuses)
         return [ticket_as_dict(tktId, summary) for tktId, summary in cursor]
+        
+    def references_search(self, req, q, filters=[]):
+        """ Returns list of possible references objects for given search parameters."""
+        if not q or not filters:
+            return []
+        query = SearchModule(self.env)._get_search_terms(q)
+
+        all_types = [ticket.name for ticket in Type.select(self.env)]       
+        used_types = [t for t in all_types if filters]
+        if used_types:
+            filters.append('ticket')
+        filtered_res =[]
+        for source in self.search_sources:
+            for href, title, date, author, excerpt in source.get_search_results(req, query, filters):
+                self.env.log.debug('references_search-res=%s' % ((href, title, date, author, excerpt),))
+                path = href.split('/')
+                res = {
+                    'href': href,
+                    'date': date,
+                    'author': author,
+                    'excerpt': excerpt,
+                    'title' : title,
+                    'type': path[-2],
+                    'id': path[-1]
+                }
+                if(res['type']=='ticket'):
+                    #hack to avoid database access
+                    self.env.log.debug('references_search-ticket=%s' % res)
+
+                    match = re.match('<span .+?>(.*?)</span>:(.+?):(.*)', str(title))
+                    if match:
+                        ticket_type = match.group(2).strip()
+                        self.env.log.debug('references_search-ticket-type=%s' % ticket_type)
+                        if ticket_type not in filters:
+                            continue
+                        res.update(
+                            {
+                                'title' :to_unicode(match.group(3)),
+                                'idx': '%02d' % all_types.index(ticket_type),
+                                'subtype' : ticket_type
+                            }
+                        )
+                else:
+                    res['title'] = to_unicode('wiki: %s' % res['title'].split(':',2)[0])
+                    res['idx']=99
+                filtered_res.append(res)
+        
+        filtered_res.sort(key= lambda x: '%s %s' % (x['idx'], x['title']))
+        return filtered_res
+    def apply_preset(self, req, tickets, preset=None):
+        if preset is None:
+            return tickets
+            
+        presets = preset and [kw.split('=', 1) for kw in preset.split('&')] or []
+        fields = dict([(field, value) for field, value in presets])
+
+        warn = []
+        modified_tickets = []
+        if tickets and presets:
+            db = self.env.get_db_cnx()
+            ticket_module = TicketModule(self.env)
+            action = fields.get('action')
+
+            for ticket_id in tickets:
+                if 'TICKET_CHGPROP' in req.perm('ticket', ticket_id):
+                    ticket  = Ticket(self.env, ticket_id, db)
+                    ticket.populate(fields)
+                    if action:
+                        field_changes, problems = ticket_module.get_ticket_changes(req, ticket, action)
+                        if problems:
+                            for problem in problems:
+                                warn.append(problem)
+                        ticket_module._apply_ticket_changes(ticket, field_changes) # Apply changes made by the workflow
+
+                    ticket.save_changes(req.authname, None, db=db)
+                    modified_tickets.append(ticket_id)
+                else:
+                    warn.append(_("You have no permission to modify ticket '%(ticket)s'", ticket=ticket_id))
+            db.commit()
+        return { 'tickets' : modified_tickets, 'warnings': warn}
+        
+class AttachmentRPC(Component):
+    """ An interface for attachments manipulations. """
+
+    implements(IXMLRPCHandler)
+
+    # IXMLRPCHandler methods
+    def xmlrpc_namespace(self):
+        return 'attachment'
+
+    def xmlrpc_methods(self):
+        yield (None, ((bool, str, str, str),), self.remove)
+        
+    def remove(self, req, realm, objid, filename):
+        """ Delete an attachment. """
+        resource = Resource(realm, objid).child('attachment', filename)
+        attachment = Attachment(self.env, resource)
+        req.perm(attachment.resource).require('ATTACHMENT_DELETE')
+        attachment.delete()
+        return True
 

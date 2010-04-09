@@ -1,31 +1,48 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
+import re
 
 from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
 from trac.attachment import AttachmentModule
 from trac.config import ListOption, Option, ExtensionOption
-from trac.core import implements, Component
+from trac.core import implements, Component, TracError
 from trac.mimeview import Context
-from trac.resource import Resource
-from trac.ticket import TicketSystem
+from trac.perm import IPermissionRequestor
+from trac.resource import Resource, ResourceNotFound, IResourceManager, get_resource_url, get_resource_name
+from trac.search import ISearchSource, search_to_sql, shorten_result
 
-from trac.ticket.model import Type
+from trac.ticket import TicketSystem, group_milestones
+from trac.ticket.api import ITicketChangeListener
+from trac.ticket.model import Type, Milestone
 from trac.ticket.roadmap import MilestoneModule, RoadmapModule, TicketGroupStats, \
-    DefaultTicketGroupStatsProvider, apply_ticket_permissions,get_ticket_stats,milestone_stats_data
+    ITicketGroupStatsProvider, DefaultTicketGroupStatsProvider, \
+    apply_ticket_permissions,get_ticket_stats,milestone_stats_data
+    
+from trac.ticket.web_ui import TicketModule
+from trac.timeline.api import ITimelineEventProvider
+
+from trac.util import get_reporter_id
 from trac.util.datefmt import get_date_format_hint, \
-    parse_date, utc, format_datetime, to_datetime, localtz, to_timestamp
+    parse_date, utc, format_datetime, to_datetime, localtz, to_timestamp, \
+    get_datetime_format_hint
 from trac.util.translation import _
 
+from trac.web import IRequestHandler
 from trac.web.api import ITemplateStreamFilter
-from trac.web.chrome import Chrome, add_link, add_stylesheet, add_warning
+from trac.web.chrome import Chrome, add_link, add_notice, add_stylesheet, \
+    add_warning, INavigationContributor
+
+from trac.wiki.api import IWikiSyntaxProvider
 from trac.wiki.formatter import format_to
+
+from tracrpc.api import IXMLRPCHandler
 
 from itteco.init import IttecoEvnSetup
 from itteco.utils.render import add_jscript
 from itteco.scrum.burndown import IBurndownInfoProvider
 from itteco.ticket.api import MilestoneSystem
-from itteco.ticket.model import StructuredMilestone
+from itteco.ticket.model import StructuredMilestone, milestone_ticket_type
 from itteco.ticket.report import IttecoReportModule
 from itteco.ticket.utils import get_fields_by_names, get_tickets_for_milestones
 from itteco.utils import json
@@ -37,10 +54,13 @@ def get_tickets_for_structured_milestone(env, db, milestone, field='component', 
     while sub_mils:
         mils.extend(sub_mils)
         cursor = db.cursor()
-        cursor.execute("SELECT milestone"
-                        " FROM milestone_custom"
-                       " WHERE name='parent'"
-                         " AND value IN (%s) " % ("%s,"*len(sub_mils))[:-1], sub_mils)
+        cursor.execute("SELECT m.name"
+                        " FROM milestone m,"
+                             " ticket t"
+                       " WHERE m.name=t.summary"
+                         " AND t.type=%%s"
+                         " AND t.milestone IN (%s)" % ("%s,"*len(sub_mils))[:-1],
+                        tuple([milestone_ticket_type]+sub_mils))
         sub_mils = [sub_milestone for sub_milestone, in cursor if sub_milestone not in mils]
     return get_tickets_for_milestones(db, mils, get_fields_by_names(env, field), types)
 
@@ -121,55 +141,179 @@ class SelectionTicketGroupStatsProvider(Component):
         stat.refresh_calcs()
         return stat
 
+class IttecoMilestoneModule(Component):
 
-class IttecoMilestoneModule(MilestoneModule):
+    implements(INavigationContributor, IPermissionRequestor, IRequestHandler,
+               ITimelineEventProvider, IWikiSyntaxProvider, IResourceManager,
+               ISearchSource, ITicketChangeListener, IXMLRPCHandler)
+               
+    stats_provider = ExtensionOption('milestone', 'stats_provider',
+                                     ITicketGroupStatsProvider,
+                                     'DefaultTicketGroupStatsProvider',
+        """Name of the component implementing `ITicketGroupStatsProvider`, 
+        which is used to collect statistics on groups of tickets for display
+        in the milestone views.""")
+    
+
+    # INavigationContributor methods
+
+    def get_active_navigation_item(self, req):
+        return 'roadmap'
+
+    def get_navigation_items(self, req):
+        return []
+
+    # IPermissionRequestor methods
+
+    def get_permission_actions(self):
+        actions = ['MILESTONE_CREATE', 'MILESTONE_DELETE', 'MILESTONE_MODIFY',
+                   'MILESTONE_VIEW']
+        return actions + [('MILESTONE_ADMIN', actions)]
+
+    # ITimelineEventProvider methods
+
+    def get_timeline_filters(self, req):
+        if 'MILESTONE_VIEW' in req.perm:
+            yield ('milestone', _('Milestones'))
+
+    def get_timeline_events(self, req, start, stop, filters):
+        if 'milestone' in filters:
+            self.env.log.debug('get_timeline_events')
+            milestone_realm = Resource('milestone')
+            ts_start = to_timestamp(start)
+            ts_stop = to_timestamp(stop)
+            
+            db = self.env.get_db_cnx()
+            cursor = db.cursor()
+            
+            status_map = {'new': ('newmilestone', 'created'),
+                          'reopened': ('reopenedmilestone', 'reopened'),
+                          'closed': ('closedmilestone', 'closed'),
+                          'edit': ('editedmilestone', 'updated'),
+                          'comment': ('editedmilestone', 'commented')}
+                          
+            def produce_event((id, ts, author, type, summary, description),
+                              status, comment):
+                milestone = milestone_realm(id=summary)
+                if 'MILESTONE_VIEW' not in req.perm(milestone):
+                    return None
+                kind, verb = status_map[status]
+                return (kind, datetime.fromtimestamp(ts, utc), author,
+                        (milestone, verb, status, description, comment), self)
+
+            cursor.execute("SELECT id, time, reporter, type, summary, "
+                           "       description "
+                           "  FROM ticket "
+                           " WHERE type='$milestone$' AND time>=%s AND time<=%s",
+                           (ts_start, ts_stop))
+            for row in cursor:
+                ev = produce_event(row, 'new', None)
+                if ev:
+                    yield ev
+
+            # TODO: creation and (later) modifications should also be reported
+            cursor.execute("SELECT t.id,tc.time,tc.author,t.type,t.summary, "
+                           "       tc.newvalue "
+                           "  FROM ticket_change tc "
+                           "    INNER JOIN ticket t ON t.id = tc.ticket "
+                           "      AND t.type='$milestone$' "
+                           "      AND tc.time>=%s AND tc.time<=%s "
+                           "      AND tc.field='comment' "
+                           "      AND tc.newvalue IS NOT NULL "
+                           "      AND tc.newvalue<>'' "
+                           "ORDER BY tc.time"
+                           % (ts_start, ts_stop))
+
+            for row in cursor:
+                ev = produce_event(row, 'comment', row[-1])
+                if ev:
+                    yield ev
+            cursor.execute("SELECT id, m.completed,t.reporter,t.type,t.summary, "
+                           "       t.description "
+                           "  FROM milestone m "
+                           "    INNER JOIN ticket t ON t.type='$milestone$' AND t.summary=m.name "
+                           "WHERE completed>=%s AND completed<=%s",
+                           (to_timestamp(start), to_timestamp(stop)))
+            
+            for row in cursor:
+                ev = produce_event(row, 'closed', row[-1])
+                if ev:
+                    yield ev
+
+            # Attachments
+            for event in AttachmentModule(self.env).get_timeline_events(
+                req, milestone_realm, start, stop):
+                yield event
+
+    def render_timeline_event(self, context, field, event):
+        milestone, verb, status, description, comment = event[3]
+        if field == 'url':
+            return context.href.milestone(milestone.id)
+        elif field == 'title':
+            return tag('Milestone ', tag.em(milestone.id), ' ', verb)
+        elif field == 'description':
+            return format_to(self.env, None, context(resource=milestone),
+                             status=='comment' and comment or description)
 
     # IRequestHandler methods
+
+    def match_request(self, req):
+        match = re.match(r'/milestone(?:/(.+))?$', req.path_info)
+        if match:
+            if match.group(1):
+                req.args['id'] = match.group(1)
+            return True
+
     def process_request(self, req):
         milestone_id = req.args.get('id')
         req.perm('milestone', milestone_id).require('MILESTONE_VIEW')
         
         add_link(req, 'up', req.href.roadmap(), _('Roadmap'))
 
-        db = self.env.get_db_cnx()
+        db = self.env.get_db_cnx() # TODO: db can be removed
         milestone = StructuredMilestone(self.env, milestone_id, db)
         action = req.args.get('action', 'view')
 
         if req.method == 'POST':
             if req.args.has_key('cancel'):
-                if milestone.exists:
-                    req.redirect(req.href.milestone(milestone.name))
-                else:
-                    req.redirect(req.href.roadmap())
+                req.redirect(req.href.roadmap())
             elif action == 'delete':
                 self._do_delete(req, db, milestone)
-            elif action == 'edit':
-                return self._do_save(req, db, milestone)
-        elif action in ('new', 'edit'):
+            return self._do_save(req, db, milestone)
+
+        elif action in ('new', 'edit', 'view'):
             return self._render_editor(req, db, milestone)
         elif action == 'delete':
             return self._render_confirm(req, db, milestone)
-        elif action == 'start':
-            return self._do_start(req, db, milestone)
 
-        if not milestone.name:
-            req.redirect(req.href.roadmap())
+        req.redirect(req.href.roadmap())
 
-        return self._render_view(req, db, milestone)
+    # Internal methods
+
+    def _do_delete(self, req, db, milestone):
+        req.perm(milestone.resource).require('MILESTONE_DELETE')
+
+        retarget_to = None
+        if req.args.has_key('retarget'):
+            retarget_to = req.args.get('target') or None
+        milestone.delete(retarget_to, req.authname)
+        db.commit()
+        add_notice(req, _('The milestone "%(name)s" has been deleted.',
+                          name=milestone.name))
+        req.redirect(req.href.roadmap())
 
     def _do_save(self, req, db, milestone):
-        perm = milestone.exists and 'MILESTONE_MODIFY' or 'MILESTONE_CREATE'
-        req.perm(milestone.resource).require(perm)
+        if milestone.exists:
+            req.perm(milestone.resource).require('MILESTONE_MODIFY')
+        else:
+            req.perm(milestone.resource).require('MILESTONE_CREATE')
+        
+        ticket_module = TicketModule(self.env)
+        ticket_module._populate(req, milestone.ticket, False)
+        action = req.args.get('action', 'leave')
 
-        self._populate_custom_fields(req, milestone)
-        action = req.args.get('workflow_action')
-        actions = MilestoneSystem(self.env).get_available_actions(
-            req, milestone)
-            
-        if action not in actions:
-            raise TracError(_('Invalid action "%(name)s"', name=action))
-            # (this should never happen in normal situations)
-        field_changes, problems = self.get_milestone_changes(req, milestone, action)
+        field_changes, problems = ticket_module.get_ticket_changes(req, milestone.ticket,
+                                    action)
         if problems:
             for problem in problems:
                 add_warning(req, problem)
@@ -179,215 +323,128 @@ class IttecoMilestoneModule(MilestoneModule):
                                 tag.pre('[trac]\nworkflow = ...\n'),
                                 tag.p('in your ', tag.tt('trac.ini'), '.'))
                             )
-        for key in field_changes:
-            milestone[key] = field_changes[key]['new']
+
+        ticket_module._apply_ticket_changes(milestone.ticket, field_changes)
 
         old_name = milestone.name
-        new_name = req.args.get('name')
-        new_parent_name = req.args.get('parent')
+        new_name = milestone.ticket['summary']
+        
+        milestone.name = new_name
+        milestone.description = milestone.ticket['description']
+
+        due = req.args.get('duedate', '')
+        milestone.due = due and parse_date(due, tzinfo=req.tz) or None
+
+        completed = req.args.get('completeddate', '')
+        retarget_to = req.args.get('target')
+
+        # Instead of raising one single error, check all the constraints and
+        # let the user fix them by going back to edit mode showing the warnings
         warnings = []
         def warn(msg):
             add_warning(req, msg)
             warnings.append(msg)
-            
-        if new_parent_name in (old_name, new_name):
-            warn('Milestone "%s" cannot be parent for itself.,Please, give it another thought' % new_name)
-        else:
-            milestone['parent'] = new_parent_name
-            
-        started = req.args.get('starteddate', '')
-        if 'started' in req.args:
-            started = started and parse_date(started, req.tz) or None
-            if started and started > datetime.now(utc):
-                warn(_('Started date may not be in the future'))
-        else:
-            started = None
-        milestone.started = started
 
+        # -- check the name
+        if new_name:
+            if new_name != old_name:
+                # check that the milestone doesn't already exists
+                # FIXME: the whole .exists business needs to be clarified
+                #        (#4130) and should behave like a WikiPage does in
+                #        this respect.
+                try:
+                    other_milestone = StructuredMilestone(self.env, new_name, db)
+                    warn(_('Milestone "%(name)s" already exists, please '
+                           'choose another name', name=new_name))
+                except ResourceNotFound:
+                    pass
+        else:
+            warn(_('You must provide a name for the milestone.'))
+
+        # -- check completed date
+        if action in MilestoneSystem(self.env).starting_action:
+            milestone.ticket['started'] = str(to_timestamp(datetime.now(utc)))
+        if action in MilestoneSystem(self.env).completing_action:
+            milestone.completed = datetime.now(utc)
+            
         if warnings:
             return self._render_editor(req, db, milestone)
-        else:
-            results = MilestoneModule._do_save(self, req, db, milestone)
-            return  results
-            
-    def get_milestone_changes(self, req, milestone, selected_action):
-        """Returns a dictionary of field changes.
         
-        The field changes are represented as:
-        `{field: {'old': oldvalue, 'new': newvalue, 'by': what}, ...}`
-        """
-        # Start with user changes
-        field_changes = {}
-        for field, value in milestone._old.iteritems():
-            field_changes[field] = {'old': value,
-                                    'new': milestone[field],
-                                    'by':'user'}
-        # Apply controller changes corresponding to the selected action
-        problems = []
-        for controller in self._get_action_controllers(req, milestone,
-                                                       selected_action):
-            cname = controller.__class__.__name__
-            action_changes = controller.get_milestone_changes(req, milestone,
-                                                           selected_action)
-            for key in action_changes.keys():
-                old = milestone[key]
-                new = action_changes[key]
-                # Check for conflicting changes between controllers
-                if key in field_changes:
-                    last_new = field_changes[key]['new']
-                    last_by = field_changes[key]['by'] 
-                    if last_new != new and last_by:
-                        problems.append('%s changed "%s" to "%s", '
-                                        'but %s changed it to "%s".' %
-                                        (cname, key, new, last_by, last_new))
-                field_changes[key] = {'old': old, 'new': new, 'by': cname}
-        # Detect non-changes
-        for key, item in field_changes.items():
-            if item['old'] == item['new']:
-                del field_changes[key]
-        return field_changes, problems
+        # -- actually save changes
+        if milestone.exists:
+            cnum = req.args.get('cnum')
+            replyto = req.args.get('replyto')
+            internal_cnum = cnum
+            if cnum and replyto: # record parent.child relationship
+                internal_cnum = '%s.%s' % (replyto, cnum)
+
+            now = datetime.now(utc)
+            milestone.save_changes(get_reporter_id(req, 'author'),
+                                         req.args.get('comment'), when=now,
+                                         cnum=internal_cnum)
+            # eventually retarget opened tickets associated with the milestone
+            if 'retarget' in req.args and completed:
+                cursor = db.cursor()
+                cursor.execute("UPDATE ticket SET milestone=%s WHERE "
+                               "milestone=%s and status != 'closed'",
+                                (retarget_to, old_name))
+                self.env.log.info('Tickets associated with milestone %s '
+                                  'retargeted to %s' % (old_name, retarget_to))
+        else:
+            milestone.insert()
+        db.commit()
+
+        add_notice(req, _('Your changes have been saved.'))
+        jump_to = req.args.get('jump_to', 'roadmap')
+        if jump_to=='roadmap':
+            req.redirect(req.href.roadmap())
+        elif jump_to =='whiteboard':
+            req.redirect(req.href.whiteboard('team_tasks')+'#'+milestone.name)
+        else:
+            req.redirect(req.href.milestone(milestone.name))
+
+        
 
     def _render_confirm(self, req, db, milestone):
-        return self._delegate_call(req, db, milestone, MilestoneModule._render_confirm)
+        req.perm(milestone.resource).require('MILESTONE_DELETE')
+
+        milestones = [m for m in Milestone.select(self.env, db=db)
+                      if m.name != milestone.name
+                      and 'MILESTONE_VIEW' in req.perm(m.resource)]
+        data = {
+            'milestone': milestone,
+            'milestone_groups': group_milestones(milestones,
+                'TICKET_ADMIN' in req.perm)
+        }
+        return 'milestone_delete.html', data, None
 
     def _render_editor(self, req, db, milestone):
-        template, data, content_type = self._delegate_call(req, db, milestone, MilestoneModule._render_editor)
-        selected_action = req.args.get('workflow_action')
-        
-        action_controls = []
-        sorted_actions = MilestoneSystem(self.env).get_available_actions(req,
-                                                                      milestone)
-        for action in sorted_actions:
-            first_label = None
-            hints = []
-            widgets = []
-            for controller in self._get_action_controllers(req, milestone,
-                                                           action):
-                label, widget, hint = controller.render_milestone_action_control(
-                    req, milestone, action)
-                if not first_label:
-                    first_label = label
-                widgets.append(widget)
-                hints.append(hint)
-            action_controls.append((action, first_label, tag(widgets), hints))
-        if not selected_action:
-            selected_action = action_controls[0][0]
-        data.update(
-            {
-                'workflow_action': selected_action,
-                'action_controls' : action_controls,
-                'structured_milestones' : data['milestones']
-            }
-        )
-        return 'itteco_milestone_edit.html', data, content_type
-        
-    def _delegate_call(self, req, db, milestone, func):
-        template, data, content_type = func(self, req, db, milestone)
-        if data:
-            data['milestones'] = StructuredMilestone.select(self.env, False, db)
-        return template, data, content_type
-        
-    def _render_view(self, req, db, milestone):
-        milestone_groups = []
-        available_groups = []
-        component_group_available = False
-        ticket_fields = TicketSystem(self.env).get_ticket_fields()
-        calc_on = req.args.get('calc_on', None)
-        
-        # collect fields that can be used for grouping
-        for field in ticket_fields:
-            if field['type'] == 'select' and field['name'] != 'milestone' \
-                    or field['name'] in ('owner', 'reporter'):
-                available_groups.append({'name': field['name'],
-                                         'label': field['label']})
-                if field['name'] == 'component':
-                    component_group_available = True
-
-        # determine the field currently used for grouping
-        by = None
-        if component_group_available:
-            by = 'component'
-        elif available_groups:
-            by = available_groups[0]['name']
-        by = req.args.get('by', by)
-
-        selected_types = req.args.get('tkt_type', None)
-        if selected_types:
-            selected_types = isinstance(selected_types, list) and selected_types or [selected_types,]
-        selected_type_names = [tkt_type.name for tkt_type in Type.select(self.env) 
-            if selected_types is None or tkt_type.value in selected_types]
-
-        tickets = get_tickets_for_structured_milestone(
-            self.env, db, milestone.name, [by, calc_on], selected_type_names)
-        tickets = apply_ticket_permissions(self.env, req, tickets)
-        stat = SelectionTicketGroupStatsProvider(self.env).get_ticket_group_stats(tickets, calc_on)
-        self.env.log.debug("The collected stats '%s'" % stat)
-        context = Context.from_request(req, milestone.resource)
         data = {
-            'context': context,
             'milestone': milestone,
-            'attachments': AttachmentModule(self.env).attachment_data(context),
-            'available_groups': available_groups, 
-            'grouped_by': by,
-            'groups': milestone_groups
-            }
-        data.update(
-            milestone_stats_data(
-                req, stat, \
-                [m.name for m in _get_milestone_with_all_kids(milestone)]))
+            'ticket': milestone.ticket,
+            'date_hint': get_date_format_hint(),
+            'datetime_hint': get_datetime_format_hint(),
+            'milestone_groups': [],
+        }
 
-        if by:
-            groups = []
-            for field in ticket_fields:
-                if field['name'] == by:
-                    if field.has_key('options'):
-                        groups = field['options']
-                    else:
-                        cursor = db.cursor()
-                        cursor.execute("SELECT DISTINCT %s FROM ticket "
-                                       "ORDER BY %s" % (by, by))
-                        groups = [row[0] for row in cursor]
+        if milestone.exists:
+            req.perm(milestone.resource).require('MILESTONE_VIEW')
+            milestones = [m for m in StructuredMilestone.select(self.env, db=db)
+                          if m.name != milestone.name
+                          and 'MILESTONE_VIEW' in req.perm(m.resource)]
+            data['milestone_groups'] = group_milestones(milestones,
+                'TICKET_ADMIN' in req.perm)
+        else:
+            req.perm(milestone.resource).require('MILESTONE_CREATE')
 
-            max_count = 0
-            group_stats = []
-
-            for group in groups:
-                group_tickets = [t for t in tickets if t[by] == group]
-                if not group_tickets:
-                    continue
-
-                gstat = get_ticket_stats(self.stats_provider, group_tickets)
-                if gstat.count > max_count:
-                    max_count = gstat.count
-
-                group_stats.append(gstat) 
-
-                gs_dict = {'name': group}
-                gs_dict.update(milestone_stats_data(req, gstat, milestone.name,
-                                                    by, group))
-                milestone_groups.append(gs_dict)
-
-            for idx, gstat in enumerate(group_stats):
-                gs_dict = milestone_groups[idx]
-                percent = 1.0
-                if max_count:
-                    percent = float(gstat.count) / float(max_count) * 100
-                gs_dict['percent_of_max_total'] = percent
-        tkt_types = [{'index':tkt.value, 'label': tkt.name, 
-            'active': not selected_types or str(tkt.value) in selected_types} 
-            for tkt in Type.select(self.env)]        
-        calculate_on = IttecoRoadmapModule(self.env).get_statistics_source(calc_on)
-        
-        data.update(
-            {
-                'tkt_types': tkt_types,
-                'calc_on': calculate_on,
-            }
-        )
-        
+        TicketModule(self.env)._insert_ticket_data(req, milestone.ticket, data, 
+                                         get_reporter_id(req, 'author'), {})
         self._add_tickets_report_data(milestone, req, data)
+        context = Context.from_request(req, milestone.resource)
         
-        return 'itteco_milestone_view.html', data, None
+        data['attachments']=AttachmentModule(self.env).attachment_data(context)
+
+        return 'itteco_milestone_edit.html', data, None
         
     def _add_tickets_report_data(self, milestone, req, data):
         tickets_report = MilestoneSystem(self.env).tickets_report
@@ -398,68 +455,155 @@ class IttecoMilestoneModule(MilestoneModule):
             self.env.log.debug('report_data="%s"' % (report_data,))
             data.update(report_data)
             
-            add_jscript(req, 'stuff/plugins/jquery.rpc.js')
-            add_jscript(req, 'stuff/ui/plugins/jquery.jeditable.js')
-            add_jscript(req, 'editable_report.js')
-            add_stylesheet(req, 'itteco/css/report.css')
+            debug = IttecoEvnSetup(self.env).debug
+            
+            add_jscript(req, 'stuff/plugins/jquery.rpc.js', debug)
+            add_jscript(req, 'stuff/ui/plugins/jquery.jeditable.js', debug)
+            add_jscript(req, 'stuff/ui/ui.core.js', debug)
+            add_jscript(req, 'stuff/ui/ui.draggable.js', debug)
+            add_jscript(req, 'stuff/ui/ui.droppable.js', debug)
+            add_jscript(req, 'editable_report.js', debug)
+            add_jscript(req, 'report.js', debug)
+            #add_stylesheet(req, 'itteco/css/report.css')
             data['fields_config'] = IttecoReportModule(self.env).fields_dict(data.get('header_groups',[]))
         data['render_report'] = tickets_report or None
-            
 
-    # ITimelineEventProvider methods
-    def get_timeline_events(self, req, start, stop, filters):
-        if 'milestone' in filters:
-            milestone_realm = Resource('milestone')
-            db = self.env.get_db_cnx()
-            cursor = db.cursor()
-            # TODO: creation and (later) modifications should also be reported
-            cursor.execute("SELECT %s, m.name, m.description"
-                            " FROM milestone m,"
-                                 " milestone_custom mc"
-                           " WHERE m.name = mc.milestone"
-                             " AND mc.name='started'"
-                             " AND %s>=%%s AND %s<=%%s " % (db.cast('mc.value', 'int')),
-                           (to_timestamp(start), to_timestamp(stop)))
-            for started, name, description in cursor:
-                milestone = milestone_realm(id=name)
-                if 'MILESTONE_VIEW' in req.perm(milestone):
-                    yield('milestone', datetime.fromtimestamp(started, utc),
-                          '', (milestone, description, True)) 
+    # IWikiSyntaxProvider methods
 
-            for event in MilestoneModule.get_timeline_events(self, req, start, stop, filters):
-                yield event
+    def get_wiki_syntax(self):
+        return []
 
-    def render_timeline_event(self, context, field, event):
-        started = False
-        if len(event[3])==3:
-            milestone, description, started = event[3]
+    def get_link_resolvers(self):
+        yield ('milestone', self._format_link)
+
+    def _format_link(self, formatter, ns, name, label):
+        name, query, fragment = formatter.split_link(name)
+        return self._render_link(formatter.context, name, label,
+                                 query + fragment)
+
+    def _render_link(self, context, name, label, extra=''):
+        try:
+            milestone = StructuredMilestone(self.env, name)
+        except TracError:
+            milestone = None
+        # Note: the above should really not be needed, `Milestone.exists`
+        # should simply be false if the milestone doesn't exist in the db
+        # (related to #4130)
+        href = context.href.milestone(name)
+        if milestone and milestone.exists:
+            if 'MILESTONE_VIEW' in context.perm(milestone.resource):
+                closed = milestone.is_completed and 'closed ' or ''
+                return tag.a(label, class_='%smilestone' % closed,
+                             href=href + extra)
+        elif 'MILESTONE_CREATE' in context.perm('milestone', name):
+            return tag.a(label, class_='missing milestone', href=href + extra,
+                         rel='nofollow')
+        return tag.a(label, class_='missing milestone')
+        
+    # IResourceManager methods
+
+    def get_resource_realms(self):
+        yield 'milestone'
+
+    def get_resource_description(self, resource, format=None, context=None,
+                                 **kwargs):
+        desc = resource.id
+        if format != 'compact':
+            desc =  _('Milestone %(name)s', name=resource.id)
+        if context:
+            return self._render_link(context, resource.id, desc)
         else:
-            milestone, description = event[3]
-            
-        if field == 'url':
-            return context.href.milestone(milestone.id)
-        elif field == 'title':
-            return tag('Milestone ', tag.em(milestone.id), started and ' started' or ' completed')
-        elif field == 'description':
-            return format_to(self.env, None, context(resource=milestone),
-                             description)
-                             
-    def _get_action_controllers(self, req, milestone, action):
-        """Generator yielding the controllers handling the given `action`"""
-        for controller in MilestoneSystem(self.env).action_controllers:
-            actions = [a for w,a in
-                       controller.get_milestone_actions(req, milestone)]
-            if action in actions:
-                yield controller
-                
-    def _populate_custom_fields(self, req, milestone):
-        fields = req.args
-        for k,v in fields.items():
-            if k.startswith('field_'):
-                milestone[k[6:]] = v
-            
+            return desc
+
+    # ISearchSource methods
+
+    def get_search_filters(self, req):
+        if 'MILESTONE_VIEW' in req.perm:
+            yield ('milestone', _('Milestones'))
+
+    def get_search_results(self, req, terms, filters):
+        if not 'milestone' in filters:
+            return
+        db = self.env.get_db_cnx()
+        sql_query, args = search_to_sql(db, ['name', 'description'], terms)
+        cursor = db.cursor()
+        cursor.execute("SELECT name,due,completed,description "
+                       "FROM milestone "
+                       "WHERE " + sql_query, args)
+
+        milestone_realm = Resource('milestone')
+        for name, due, completed, description in cursor:
+            milestone = milestone_realm(id=name)
+            if 'MILESTONE_VIEW' in req.perm(milestone):
+                yield (get_resource_url(self.env, milestone, req.href),
+                       get_resource_name(self.env, milestone),
+                       datetime.fromtimestamp(
+                           completed or due, utc),
+                       '', shorten_result(description, terms))
+        
+        # Attachments
+        for result in AttachmentModule(self.env).get_search_results(
+            req, milestone_realm, terms):
+            yield result
+    
+    # ITicketChangeListener methods
+    def ticket_created(self, ticket):
+        pass
+
+    def ticket_changed(self, ticket, comment, author, old_values):
+        old_summary = old_values.get('summary')
+        if ticket['type']==milestone_ticket_type \
+            and old_summary \
+            and ticket['summary'] != old_summary:
+            milestone = Milestone(self.env, old_summary)
+            if milestone.exists:
+                milestone.name = ticket['summary']
+                milestone.update()
+        
+
+    def ticket_deleted(self, ticket):
+        pass
+        
+    # IXMLRPCHandler methods
+    def xmlrpc_namespace(self):
+        return 'structured_milestone'
+
+    def xmlrpc_methods(self):
+        yield (None, ((dict,), (dict)), self.create)
+        yield (None, ((dict,), (str, str, dict)), self.update)
+
+    def create(self, req, attributes):
+        """ Create a structure milestone object."""
+        name = attributes.get('summary')
+        milestone = StructuredMilestone(self.env, name)
+        if milestone.exists:
+            raise TracError('Milestone already with name %s exists' % name)
+        req.perm.require('MILESTONE_CREATE', Resource(milestone.resource.realm))
+        milestone.description = attributes.get('description')
+        for k, v in attributes.iteritems():
+            milestone.ticket[k] = v
+        milestone.insert()
+        return {'name': milestone.name, 'description': milestone.description}
+    
+    def update(self, req, name, comment, attributes=None):
+        """ Updates a structure milestone object."""
+        milestone = StructuredMilestone(self.env, name)
+        if not milestone.exists:
+            raise TracError('Milestone with name %s does not exist' % name)
+        req.perm.require('MILESTONE_CREATE', Resource(milestone.resource.realm))
+        if attributes is not None:
+            milestone.name = attributes.get('summary')
+            milestone.description = attributes.get('description')
+            for k, v in attributes.iteritems():
+                milestone.ticket[k] = v
+        milestone.save_changes(get_reporter_id(req, 'author'), comment)
+        return {'name': milestone.name, 'description': milestone.description}
+        
+    
 class IttecoRoadmapModule(RoadmapModule):
     _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])   
+    _ticket_groups = (('scope_element', _('Scope Tickets')), ('work_element', _('Work Tickets')), ('all', _('All tickets')))
+    
     def get_statistics_source(self, active = None):
         stats_source = [
             {
@@ -505,9 +649,15 @@ class IttecoRoadmapModule(RoadmapModule):
                 i+=1
 
         calc_on = req.args.get('calc_on')
-        selected_types = req.args.get('tkt_type')
-        if selected_types:
-            selected_types = isinstance(selected_types, list) and selected_types or [selected_types,]
+        ticket_group = req.args.get('ticket_group', 'all')
+        selected_types = None
+        if ticket_group=='scope_element':
+            selected_types = IttecoEvnSetup(self.env).scope_element
+        elif ticket_group=='work_element':
+            selected_types = IttecoEvnSetup(self.env).work_element
+        else:
+            ticket_group = 'all'
+            
         selected_type_names = [tkt_type.name for tkt_type in Type.select(self.env) 
             if selected_types is None or tkt_type.value in selected_types]
 
@@ -535,16 +685,15 @@ class IttecoRoadmapModule(RoadmapModule):
                  'ics')
         visibility = [{'index':idx, 'label': label, 'active': idx==current_level} 
             for idx, label in enumerate(IttecoEvnSetup(self.env).milestone_levels)]
-        tkt_types = [{'index':tkt.value, 'label': tkt.name, 
-            'active': not selected_types or str(tkt.value) in selected_types} 
-                for tkt in Type.select(self.env)]
+        ticket_groups = [{'index':value, 'label': name, 'active': value==ticket_group} 
+                for value, name in self._ticket_groups]
         
         calculate_on = self.get_statistics_source(req.args.get('calc_on'))
         data = {
             'milestones': milestones,
             'milestone_stats': stats,
             'mil_types': visibility,
-            'tkt_types': tkt_types,
+            'ticket_groups': ticket_groups,
             'calc_on': calculate_on,
             'queries': [],
             'showall': showall,

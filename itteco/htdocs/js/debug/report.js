@@ -1,152 +1,97 @@
 function log(){
     if(typeof(console)!='undefined' && console.log){
-        console.log.apply(console, arguments);
+        console.log(arguments);
     }
-}
-
-function showPopup(ticket, popupName){
-    function cancel(){
-        $.fn.colorbox.close();
-        return false;
-    }
-
-    window.popup_context = {
-        cancel : cancel,
-        setup  :function (root){},
-        done : function(tkt){
-            log('popup reports that action was done', tkt);
-            return cancel();
-        }
-    }
-
-    $.fn.colorbox(
-        {
-            href: './../popup/'+popupName+'/'+ticket,
-            open: true,
-            title: 'Edit Ticket'
-        }
-    )
-
-}
-function showQuickEditor(ticket){
-    showPopup(ticket,'tickets');
-}
-function showCommentEditor(ticket){
-    showPopup(ticket,'comment');
-}
-function showFullEditor(ticket){
-    document.location = './../ticket/'+ticket;
 }
 
 (function($){
     
     $.fn.extend({
         executableGroup : function(options){
+            
+            if (typeof options == 'string') {
+                var args = Array.prototype.slice.call(arguments, 1);
+                var res = $.data(document, 'executableGroup')[options].apply(this, args);
+                if (res != undefined) {
+                    return res;
+                }
+                return this;
+            }
+            
             var dragHelper = '<div id="dragHelper"><div>Dragging <span class="quantity">0</span> tickets.</div></div>';
+            var ctx = {
+                selectedTickets : [], 
+                groups : {}
+            };
             var defaults = {
                 drop_box_items_selector : '#dropbox .content .report-result',
-                all_tickets_selector : '.listing tbody td.ticket',
+                all_tickets_selector : '.listing tbody tr',
+                rpcurl: '/login/xmlrpc',
                 draggable_options : {
                     helper:function(e){return $(dragHelper).get();}, 
-                    opacity: 0.8, 
-                    start: function(e, ui){
-                        $('.quantity', ui.helper).text($(":checked").length || 1);
-                    }
+                    opacity: 0.8,
                 },
                 groupItemsContainer : function(header){
                     return $(header).next();
-                }
+                },
+                selectionCallback : function(){},
+                debug: false
             };
             
             var options = $.extend(defaults, options);
+            var rpc = $.rpc(
+               options.rpcurl,
+               "xml",
+               function(server) {
+                    if(!server || !server.system) {
+                        alert("Could not get the rpc object ..");
+                        return;
+                    }
+                    log('rpc initialized');
+                }
+            );
             function log(){
-                if (options.debug && typeof console!='undefined'){
-                    console.log.apply("", arguments);
+                if (options.debug){
+                    console.log.apply(console, arguments);
                 }
             }
-            function ContextMenu() {
-                $('body').append('<div id="inline-menu"><div id="inline-menu-body"></div></div>');
-                
-                var inlineMenu 		= $('#inline-menu');
-                var inlineMenuBody 	= $('#inline-menu-body');
-                // show menu
-                function showInlineMenu(element) {
-                    log('element', element, $(element));
-                    offset = $(element).offset();
-                    inlineMenu.css('left',offset.left);
-                    inlineMenu.css('top',offset.top);
-                    menuItems = getInlineMenu(element);
-                    if (menuItems) {
-                        inlineMenuBody.html('<div>' + $(element).outerHTML() + '</div>' + menuItems);
-                        inlineMenu.show();	
-                    }
-                }
-                
-                // get menu items
-                function getInlineMenu(element) {
-                    var ticket = $(element).text().substr(1);
-                    if ($(element).hasClass('ticket-pointer')) {
-                        menu = '<ul>';
-                        menu += '<li class="inline-menu-item-ticket-quick-editor"><a href="#quickeditor" onclick="showQuickEditor(\'' + ticket + '\')">Quick Editor</a></li>';
-                        menu += '<li class="inline-menu-item-ticket-comment"><a href="#comment" onclick="showCommentEditor(\'' + ticket + '\')">Comment</a></li>';
-                        menu += '<li class="inline-menu-item-ticket-full-editor"><a href="#fulleditor" onclick="showFullEditor(\'' + ticket + '\')">Full Editor</a></li>';
-                        menu += '</ul>';
-                    }
-                    return menu;
-                }
+            log('created instance of excutable group for', this);
 
-                function attach(obj){
-                    $(obj).mouseover(
-                        function() {
-                            showInlineMenu(this);
-                        }								
-                    );
-                }
-                
-                // events
-                this.attachTo = attach;
-                
-                attach($('.ticket-pointer'));
-                
-                $(inlineMenu).hover(
-                    function(event) {},
-                    function(event) {
-                        $(inlineMenu).hide();
-                    }
-                );
-            }
-
-            var disableTickets = function(tkts){
-                $(":checked", tkts).attr('disabled', 'disabled');
-            }
-            var enableTickets = function(tkts){
-                $(":checked", tkts).removeAttr('disabled').attr('checked', false);
-                $('td.ticket',tkts).draggable(options.draggable_options);
-            };
-
-            var getPattern = function(obj){
-                var pattern = obj.text();
-                obj.children().each(function(){
-                    pattern = pattern.replace($(this).text(),'');
+            function disableTickets(ids){
+                $.each(ids, function(i, id){
+                    $(':chekbox:checked[value="'+id+'"]').attr('disabled', 'disabled');
                 });
-                return pattern.replace(/\n\s*/, '');
+            }
+            function enableTickets(ids){
+                $.each(ids, function(i, id){
+                    var cb = $(':chekbox:[value="'+id+'"]');
+                    cb.removeAttr('disabled').attr('checked', false);
+                    decorateCheckbox(cb, id);
+                    decorateTicket($('td.ticket[ticket="'+id+'"]'), id);
+                });
             };
-            
-            var executeAjaxAction = function(tickets, target){
-                var ids = $.map(tickets,function(tkt, i){return $('a',tkt).text().substring(1)});
-                $.getJSON(document.location.pathname, {action: 'execute', tickets: ids.join(','), presets: target.attr('preset')}, 
-                    function(data){ 
-                        if (data && data.tickets){
+
+            function executeAjaxAction(tickets, groupName){
+                log('executeAjaxAction', tickets, groupName);
+                var group = ctx.groups[groupName];
+                var target = group.element;
+                ctx.selectedTickets = [];
+                options.selectionCallback(ctx.selectedTickets.length>0, ctx.selectedTickets);
+                rpc.ticketconfig.apply_preset(
+                    function(resp){ 
+                        var tickets = resp.result.tickets;
+                        if (tickets){
                             var selectors = [];
-                            $.each(data.tickets, function(){
+                            $.each(tickets, function(){
                                 selectors.push(' td.ticket[ticket="'+this+'"]');
                             });
-                            var rows = $(selectors.join(','), '.listing tbody').parent().remove();
-                            
-                            var target_table = options.groupItemsContainer('.executableGroup[idx="'+target.attr('idx') +'"]');
+                            var rows = $(selectors.join(','), $('.listing tbody')).parent();
+                            log('removing rows', rows);
+                            var target_table = options.groupItemsContainer(group.ticketsElement);
                             if(target_table.length>0){
-                                $('tbody', target_table).append(rows);
+                                rows.appendTo($('tbody', target_table));
                             }else{
+                                rows.remove();
                                 var sMatch = $('.numrows', target);
                                 var s = sMatch.text().match(/\d+/);
                                 var currQuantity = 0;
@@ -156,105 +101,163 @@ function showFullEditor(ticket){
                                 sMatch.text(getMatchesText(currQuantity+rows.length));
                             }
                             calculateGroupMatches();
-                            enableTickets(rows);
+                            enableTickets(tickets);
                         }
-                    });
+                    },
+                    tickets,
+                    group.preset
+                );
             };
 
-            var dropTicketsToGroup = function(e, ui){
-                var tkts = $(options.all_tickets_selector+':has(:checked)');
-                if(tkts.length==0){
-                    tkts = ui.draggable;
-                }
-                disableTickets(tkts)
-                executeAjaxAction(tkts, $(this));
-            };
-            var decorateDropBox = function(){
+
+            function decorateDropBox(){
                 $('#dropbox .control-panel a').unbind('click').click(function(){
                     $('#dropbox .control-panel>*').add('#dropbox .content').toggle();
                 });                
             }
+            
+            function getSelectedTickets(){
+                log('selectedTickets are', ctx.selectedTickets);
+                return ctx.selectedTickets;
+            }
+            
+            function assignSelectionToGroup(groupName){
+                log('dropped tickets', ctx.selectedTickets, groupName, getSelectedTickets());
+                disableTickets(ctx.selectedTickets)
+                executeAjaxAction(ctx.selectedTickets, groupName);
+            }
 
-            var decorateDropBoxItems = function(sel){
+            function decorateDropBoxItems(sel){
+                log('decorateDropBoxItems', sel);
                 var o = $(sel);
                 o.each(function(i){
                     var dropBoxGroup = $(this);
-                    dropBoxGroup.attr('pattern', getPattern(dropBoxGroup));
-                    dropBoxGroup.attr('idx', 'group_'+i);
-                    if($('.move-here', dropBoxGroup).length==0){
-                        dropBoxGroup.droppable(
-                            {
-                                accept: '.ticket',
-                                activeClass: 'droppable-active',
-                                hoverClass: 'droppable-hover', 
-                                drop: dropTicketsToGroup
-                            }
-                        );                        
-                        dropBoxGroup.prepend('<div class="move-here">&#x00BB;</div>');
-                        
-                        $('.move-here', dropBoxGroup).click(function(){
-                            var tkts = $('.listing tbody td.ticket:has(:checked)');
-                            if(tkts.length>0){
-                                disableTickets(tkts);
-                                executeAjaxAction(tkts, $(this).parent());
-                            }
-                        });
+                    var groupName = $('.exec-group-name',dropBoxGroup).text();
+                    ctx.groups[groupName] = {
+                        name : groupName,
+                        preset : dropBoxGroup.attr('preset'),
+                        element: dropBoxGroup
                     }
+                    dropBoxGroup.attr('idx', 'group_'+i);
+                    dropBoxGroup.droppable(
+                        {
+                            accept: '.ticket',
+                            activeClass: 'droppable-active',
+                            hoverClass: 'droppable-hover', 
+                            drop: function(e, ui){
+                                assignSelectionToGroup(groupName);
+                            }
+                        }
+                    );                        
                 });
             };
 
-            var setupGroup = function(group){
-                var g = $(group);
+            function setupGroup(g){
                 g.addClass('executableGroup');
-                var matchingDropBoxItem = $(options.drop_box_items_selector + '[pattern="'+getPattern(group)+'"]');
-                if(matchingDropBoxItem.length==1){
-                    g.attr('idx', matchingDropBoxItem.attr('idx'));
+                var groupName = $('.exec-group-name', g).text();
+                var group = ctx.groups[groupName];
+                log('setting up group ', groupName, group);
+                if(group){
+                    ctx.groups[groupName].ticketsElement = g;
+                    var tableLocator = options.groupItemsContainer(g);
+                    $('thead tr', tableLocator).prepend('<th class="t-right t-s t-check"/>');
+                    decorateTickets(tableLocator);
                 }
             };
+            
+            function decorateTicket(ticket, tkt_id){
+                ticket.draggable(
+                    $.extend(
+                        options.draggable_options, 
+                        {
+                            start: function(e, ui){
+                                if(ctx.selectedTickets.length==0){
+                                    ctx.selectedTickets.push(tkt_id);
+                                }
+                                $('.quantity', ui.helper).text(ctx.selectedTickets.length);
+                            },
+                            cancel: function(e, ui){
+                                if(ctx.selectedTickets.length==1
+                                    && $(':chekbox:checked[value="'+tkt_id+'"]').length==0){
+                                        log('canceling selection');
+                                    ctx.selectedTickets= [];
+                                }
+                            }
+                        }
+                    )
+                );
+                ticket.parent().removeClass('selected');
+            }
+            
+            function decorateCheckbox(checkbox, tkt_id){
+                checkbox.click(function(){
+                    if($(this).is(':checked')){
+                        ctx.selectedTickets.push(tkt_id);
+                    }else{
+                        ctx.selectedTickets = $.grep(ctx.selectedTickets, function(item, i){
+                            log('grep', item, tkt_id);
+                            return item != tkt_id;
+                        });
+                    }
+                    log('selectedTickets', tkt_id, ctx.selectedTickets);
+                    $(this).parent().parent().toggleClass('selected');
+                    options.selectionCallback(ctx.selectedTickets.length>0, ctx.selectedTickets);
+                });
+            }
 
-            var decorateTickets = function(itemsContainer){
+            function decorateTickets(itemsContainer){
                 var tkts = $('td.ticket', itemsContainer);
-                tkts.css('cursor','move').prepend('<input type="checkbox"/>');
-                var contextMenu = new ContextMenu();
-                contextMenu.attachTo($('a', tkts).addClass('ticket-pointer'));
+                tkts.css('cursor','move');
+
+                $('a', tkts).addClass('ticket-pointer');
                 tkts.each(function(i){
-                    var t = $(this);
+                    var t = $(this), checkbox;
                     var tkt_id = $('a', t).text().substring(1);
                     t.attr('ticket', tkt_id);
+                    t.before($('<td/>').append(checkbox = $('<input type="checkbox" value="'+tkt_id+'"/>')));
+                    decorateCheckbox(checkbox, tkt_id);
+                    decorateTicket(t, tkt_id);
                 });
-                tkts.draggable(options.draggable_options);
             };
             
-            var getMatchesText = function(cnt){
-                var txt = '(No matches)';
+            function getMatchesText(cnt){
+                var txt = 'No matches';
                 if (cnt>0){
                     if(cnt==1){
-                        txt = '(1 match)';
+                        txt = '1 match';
                     }else{
-                        txt = '('+cnt+' matches)';
+                        txt = ''+cnt+' matches';
                     }
                 }
                 return txt;
             };
             
-            var calculateGroupMatches= function(){
-                var dropBoxGroups= $(options.drop_box_items_selector);
-                
-                $('.executableGroup').each(function(i){
-                    var o = $(this);
-                    var txt = getMatchesText($('td.ticket', options.groupItemsContainer(o)).length);
-                    $('.numrows', o).text(txt);
-                    $('.numrows', dropBoxGroups.filter('[idx="'+o.attr('idx') +'"]')).text(txt);
+            function calculateGroupMatches(){
+                $.each(ctx.groups, function(i, group){
+                    if(group.ticketsElement){
+                        var txt = getMatchesText($('td.ticket', options.groupItemsContainer(group.ticketsElement)).length);
+                        $('.numrows', group.ticketsElement).text(txt);
+                        $('.numrows', group.element).text(txt);
+
+                    }
                 });
             };
             
             decorateDropBox();
             decorateDropBoxItems(options.drop_box_items_selector);
             
+            var publicMethods = {
+                'assign' : function(groupName){
+                    assignSelectionToGroup(groupName);
+                },
+            };
+            $.data(document, 'executableGroup', publicMethods);
+
+            
             return this.each(function(){
                 var o = options;
+                log('enabling executable groups for', this, options);
                 setupGroup($(this));
-                decorateTickets(o.groupItemsContainer(this));
             });
         },
         outerHTML : function() {
@@ -262,7 +265,3 @@ function showFullEditor(ticket){
         }
     });
 })(jQuery);
-
-$(document).ready(function(){
-    $('#content h2.report-result').executableGroup();
-});

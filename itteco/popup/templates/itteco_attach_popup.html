@@ -1,0 +1,113 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+  <xi:include href="itteco_whiteboard_utils.html" />
+<body py:strip="">
+<script type="text/javascript">/*<![CDATA[*/
+    function attachmentFormManager(rootSel, sysUrl){ 
+        var root = $(rootSel);
+        
+        function log(){
+			if(typeof(window.console)=='undefined'){
+				window.console ={log: function(){}};
+			}
+        }
+        function setupCallback(root){
+            if(window.popup_context && window.popup_context.setup){
+                popup_context.setup(root);
+            }
+        }
+        
+        function notify(vo){
+            log('nofity-parent',window.popup_context, vo);
+            if(window.popup_context && window.popup_context.done){
+                window.popup_context.done(vo);
+            }
+        }
+        function bindHandlers(){
+            var form = $('form', root);
+            log('bindHandlers', form);
+            
+            $('.upload-button', form).click(function(){
+                $.ajaxFileUpload(
+                    {
+                        url: '${href("popup", "attach", resource.realm, resource.id)}',
+                        originalForm: form,
+                        secureuri:false,
+                        fileElementId:'attachment',
+                        dataType: 'json',
+                        beforeSend:function(){
+                            $("#loading").show();
+                        },
+                        complete:function(){
+                            $("#loading").hide();
+                        },				
+                        success: function (data, status){
+                        log('success callback', data);
+                            if(typeof(data.error) != 'undefined'){
+                                if(data.error != ''){
+                                    alert(data.error);
+                                }else{
+                                    alert(data.msg);
+                                }
+                            }else{
+                                notify(data.attachment);
+                            }
+                            
+                        },
+                        error: function (data, status, e){
+                            alert(e);
+                        }
+                    }
+                )
+                return false;
+            });
+
+        }
+
+        function init(){
+            setupCallback(root);
+            bindHandlers();
+        }
+        
+        init();
+    };
+/*]]>*/</script>
+    <div class="s-block s-widget-nofx">
+        <div class="s-block-header s-widget-handler">
+            <h4>Upload File</h4>
+        </div>
+        <div class="s-block-body s-widget-body">
+            <div id="popup-attachment-editor" class="s-form">
+                <form action="" method="POST" enctype="multipart/form-data">
+                    <div class="s-form-row">
+                        <div class="s-form-cell s-form-cell-primary s-form-label"><label for="file">File</label></div>
+                        <div class="s-form-cell s-form-item"><input id="attachment" type="file" size="45" name="attachment" class="input"/></div>
+                    </div>
+                    <div class="s-form-row">
+                        <div class="s-form-cell s-form-cell-primary s-form-label"><label for="description">Description</label></div>
+                        <div class="s-form-cell s-form-item"><input type="text" name="description" size="60" /></div>
+                    </div>
+                    <div class="s-form-row">
+                        <div class="s-form-cell"></div>
+                        <div class="s-form-cell s-form-label"><input id="replace" type="checkbox" name="replace" /> &nbsp; <label for="replace">Replace existing attachment of the same name</label></div>
+                    </div>
+                    <div class="buttons">
+                        <button class="s-button upload-button">Upload</button>
+                    </div>
+                </form>
+                <script type="text/javascript">/*<![CDATA[*/
+                if(window.popup_context){
+                    attachmentFormManager("#popup-attachment-editor", "${href.login('xmlrpc')}");
+                }else{
+                    jQuery(document).ready(function(){
+                        attachmentFormManager("#popup-attachment-editor", "${href.login('xmlrpc')}");
+                    });
+                }
+                /*]]>*/</script>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -6,10 +6,13 @@ try:
 except ImportError:
     import dummy_threading as threading
 
+from trac.config import ListOption
 from trac.core import implements, Component
 from trac.ticket.api import TicketSystem
 from trac.ticket.model import Ticket
 from trac.ticket.report import ReportModule
+from trac.resource import Resource
+
 from trac.util.translation import _
 from trac.web.api import ITemplateStreamFilter, IRequestFilter
 
@@ -21,12 +24,15 @@ class IttecoReportModule(Component):
     implements(ITemplateStreamFilter, IRequestFilter)
     
     mandatory_cols = ["__group__", "__group_preset__"]
+    
+    main_reports = ListOption('itteco-report', 'main_reports','',
+        doc="Comma separated list of ids of main reports.")
+        
     id_cols = ['ticket', 'id', '_id']
     _config = None
     
     def __init__(self):
         self._config_lock = threading.RLock()
-
     
     #ITemplateStreamFilter methods
     def filter_stream(self, req, method, filename, stream, data):
@@ -36,7 +42,7 @@ class IttecoReportModule(Component):
             def script_tag(path=None, content=None):
                 kw = { 'type' : "text/javascript"}
                 if path:
-                    kw['src'] = link_builder(map_script(path))
+                    kw['src'] = link_builder(map_script(path, debug))
                 return tag.script(content , **kw)
 
             stream |= Transformer("//head").prepend(
@@ -57,39 +63,27 @@ class IttecoReportModule(Component):
                         )
                     )
                 )
-
-            if req.args and req.args.get('exec_groups'):
-                try:
-                    stream |= Transformer("//head").prepend(
-                            tag(
-                                # TODO fix scripts base path
-                                tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/common.css")),
-                                tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css")),
-                                tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/colorbox/colorbox.css"))
-                            )
-                        ).append(
-                            tag(
-                                script_tag("stuff/ui/ui.core.js"),
-                                script_tag("stuff/ui/ui.draggable.js"),
-                                script_tag("stuff/ui/ui.droppable.js"),
-                                script_tag("stuff/ui/ui.resizable.js"),
-                                script_tag('stuff/ui/plugins/jquery.colorbox.js'),
-                                script_tag('custom_select.js'),
-                                script_tag("report.js")
-                            )
+            try:
+                stream |= Transformer("//head").prepend(
+                        tag(
+                            # TODO fix scripts base path
+                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/common.css")),
+                            tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/report.css")),
+                            #tag.link(type="text/css", rel="stylesheet", href=link_builder("itteco/css/colorbox/colorbox.css"))
                         )
-                    tags =[]
-                    for group, preset, quantity, full_quantity in req.args['exec_groups']:
-                        tags.append(tag.div(group+'\n', \
-                            tag.span(
-                                quantity and '(%d match%s)' % (quantity, quantity!=1 and 'es' or '') \
-                                    or '(No matches)', class_='numrows'), \
-                            preset=preset, class_='report-result'))
-                    stream |= Transformer("//*[@id='main']").after(
-                        tag.div(_render_conrol_panel(), tag.div(class_='content', *tags), id="dropbox"))
-                except ValueError,e:
-                    #we do not fail the report it self, may be it works in read only mode
-                    self.env.log.debug('Report decoration failed: %s' % e)
+                    ).append(
+                        tag(
+                            script_tag("stuff/ui/ui.core.js"),
+                            script_tag("stuff/ui/ui.draggable.js"),
+                            script_tag("stuff/ui/ui.droppable.js"),
+                            script_tag("stuff/ui/ui.resizable.js"),
+                            script_tag('stuff/ui/plugins/jquery.colorbox.js'),
+                            script_tag('custom_select.js')
+                        )
+                    )
+            except ValueError,e:
+                #we do not fail the report it self, may be it works in read only mode
+                self.env.log.debug('Report decoration failed: %s' % e)
         return stream
 
     def _are_all_mandatory_fields_found(self, cols):
@@ -100,87 +94,92 @@ class IttecoReportModule(Component):
 
     #IRequestFilter methods
     def pre_process_request(self, req, handler):
-        if req.path_info.startswith('/report/'):
-            path = req.path_info.split('/')
-            if req.args.get('action')=='execute' or len(path)==3 and path[1]=='ticket':
-                return self
+        if req.path_info.startswith('/report'):
+            action = req.args.get('action', 'view')
+            id = int(req.args.get('id','-1'))
+            if action=='view' and id==-1:
+                req.redirect(req.href.report(self.resolve_report_number(req)))
+                
         return handler
 
     def post_process_request(self, req, template, content_type):
         return (template, content_type)
 
     def post_process_request(self, req, template, data, content_type):
+        if req.path_info.startswith('/report'):
+            data['main_reports'] = [int(id) for id in self.main_reports]
+            data['available_reports'] = self.available_reports(req)
         if data and data.get('row_groups'):
             id = req.args.get('id')
             action = req.args.get('action', 'view')
             header_groups = data.get('header_groups')
             row_groups= data.get('row_groups')
 
-            if id and action=='view' and header_groups and len(header_groups)>0:
-                all_cols = [col for header_group in header_groups for col in header_group]
-                if self._are_all_mandatory_fields_found(all_cols):
-                    id_col = [col['col'] for col in all_cols][0]
+            if id and action=='view':
+                req.session['last_used_report'] = id
+                if header_groups and len(header_groups)>0:
+                    all_cols = [col for header_group in header_groups for col in header_group]
+                    if self._are_all_mandatory_fields_found(all_cols):
+                        id_col = [col['col'] for col in all_cols][0]
 
-                    args = ReportModule(self.env).get_var_args(req)
-                    db = self.env.get_db_cnx()
-                    cursor = db.cursor()
-                    cursor.execute("SELECT query FROM report WHERE id=%s", (id,))
-                    sql, = cursor.fetchone()
-                    sql, args = ReportModule(self.env).sql_sub_vars(sql, args, db)
-                    cursor.execute("SELECT DISTINCT __group__, __group_preset__, count("+id_col+") as q, count(*) as fq "+\
-                        "FROM (%s) as group_config GROUP BY  __group__, __group_preset__" % sql, args)
-                        
-                    exec_groups = [(group, preset, quantity, full_quantity) for group, preset, quantity, full_quantity in cursor]
-                    req.args['exec_groups'] = exec_groups
-                    paginator = data['paginator']
-                    range_start, range_end = paginator.span
-
-                    num_rows = 0
-                    num_none_filtered = 0
-                    for x, y, quantity, full_quantity in exec_groups:
-                        num_rows  = num_rows + quantity
-                        num_none_filtered = num_none_filtered + full_quantity
-                        delta = full_quantity - quantity
-                        if range_start and delta and range_start>num_none_filtered:
-                            range_start = range_start - delta
-                            range_end = range_end - delta
+                        args = ReportModule(self.env).get_var_args(req)
+                        db = self.env.get_db_cnx()
+                        cursor = db.cursor()
+                        cursor.execute("SELECT query FROM report WHERE id=%s", (id,))
+                        sql, = cursor.fetchone()
+                        sql, args = ReportModule(self.env).sql_sub_vars(sql, args, db)
+                        cursor.execute("SELECT DISTINCT __group__, __group_preset__, count("+id_col+") as q, count(*) as fq "+\
+                            "FROM (%s) as group_config GROUP BY  __group__, __group_preset__" % sql, args)
                             
-                    paginator.num_items = num_rows
+                        exec_groups = [(group, preset, quantity, full_quantity) for group, preset, quantity, full_quantity in cursor]
+                        data['exec_groups']= req.args['exec_groups'] = exec_groups
+                        paginator = data['paginator']
+                        range_start, range_end = paginator.span
 
-                    num_filtered_on_page = 0
-                    for i, (value_for_group, row_group) in enumerate(row_groups):
-                        filtered_row_group = [row for row in row_group if (('id' not in row) or row['id'])]
-                        row_groups[i]=(value_for_group, filtered_row_group)
-                        range_end = range_end - (len(row_group)  - len(filtered_row_group))
-                    if range_end >paginator.num_items:
-                        range_end = paginator.num_items
-                    paginator.span = range_start, range_end
+                        num_rows = 0
+                        num_none_filtered = 0
+                        for x, y, quantity, full_quantity in exec_groups:
+                            num_rows  = num_rows + quantity
+                            num_none_filtered = num_none_filtered + full_quantity
+                            delta = full_quantity - quantity
+                            if range_start and delta and range_start>num_none_filtered:
+                                range_start = range_start - delta
+                                range_end = range_end - delta
+                                
+                        paginator.num_items = num_rows
+
+                        num_filtered_on_page = 0
+                        for i, (value_for_group, row_group) in enumerate(row_groups):
+                            filtered_row_group = [row for row in row_group if (('id' not in row) or row['id'])]
+                            row_groups[i]=(value_for_group, filtered_row_group)
+                            range_end = range_end - (len(row_group)  - len(filtered_row_group))
+                        if range_end >paginator.num_items:
+                            range_end = paginator.num_items
+                        paginator.span = range_start, range_end
         return (template, data, content_type)
         
-    #IRequestHandler mathod for action processing
-    def process_request(self, req):
-        tickets = req.args.get('tickets','').split(',')
-        presets = [kw.split('=', 1) for kw in req.args.get('presets','').split('&')]
-        warn = []
-        modified_tickets = []
-        if tickets and presets:
-            db = self.env.get_db_cnx()
-            for ticket_id in tickets:
-                if 'TICKET_CHGPROP' in req.perm('ticket', ticket_id):
-                    ticket  = Ticket(self.env, ticket_id, db)
-                    for preset in presets:
-                        field = value = None
-                        if len(preset)==2:
-                            field, value = preset
-                        else:
-                            field, = preset
-                        ticket[field] = value
-                    ticket.save_changes(req.authname, _("Changed from executable report"), db=db)
-                    modified_tickets.append(ticket_id)
-                else:
-                    warn.append(_("You have no permission to modify ticket '%(ticket)s'", ticket=ticket_id))
-            db.commit()
-        req.write(json.write({'tickets':modified_tickets, 'warnings': warn}))
+    def resolve_report_number(self, req):
+        id = -1
+        if req.path_info.startswith('/report'):
+            id = int(req.args.get('id','-1'))
+        if id == -1:
+            last_used_report = req.session.get('last_used_report')
+            if last_used_report:
+                id = last_used_report
+        if id == -1:
+            main_reports = self.main_reports
+            if main_reports:
+                id = main_reports[0]
+        if id == -1:
+            id = 1
+        return id
+    
+    def available_reports(self, req):
+        report_realm = Resource('report')
+        cursor = self.env.get_db_cnx().cursor()
+        cursor.execute("SELECT id AS report, title "
+                         "FROM report ORDER BY report")
+        return [(id, title) for id, title in cursor if 'REPORT_VIEW' in req.perm(report_realm(id=id))]
         
     def fields_config(self):
         if self._config is None:
@@ -209,9 +208,10 @@ class IttecoReportModule(Component):
                 cfg['options'] = field['options']
         mappings_config = self.env.config['itteco-report']
         for option in mappings_config:
-            for synonym in mappings_config.getlist(option,''):
-                if synonym:
-                    config[synonym] = config[option].copy()
+            if option and config.get(option):
+                for synonym in mappings_config.getlist(option,''):
+                    if synonym:
+                        config[synonym] = config[option].copy()
         self.env.log.debug('itteco-report-config=%s' % config)
         return config
     

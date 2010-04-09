@@ -10,14 +10,52 @@
                 },
                 delay     : 5000,
                 rpcurl    : '/login/xmlrpc',
-                debug     : true
+                timerurl  : '',
+                debug     : false
             };
             var options = $.extend(defaults, options);
-
             function log(){
                 if (options.debug && typeof console!='undefined'){
                     console.log.apply("", arguments);
                 }
+            }
+            
+            function PopupManager(){
+                function showPopup(ticket, popupName){
+                    function cancel(){
+                        $.fn.colorbox.close();
+                        return false;
+                    }
+
+                    window.popup_context = {
+                        cancel : cancel,
+                        setup  :function (root){},
+                        done : function(tkt){
+                            return cancel();
+                        }
+                    }
+
+                    $.fn.colorbox(
+                        {
+                            href: './../popup/'+popupName+'/'+ticket,
+                            open: true
+                        }
+                    )
+
+                }
+                function showQuickEditor(ticket){
+                    showPopup(ticket,'ticket');
+                }
+                function showCommentEditor(ticket){
+                    showPopup(ticket,'comment/ticket');
+                }
+                function showFullEditor(ticket){
+                    document.location = './../ticket/'+ticket;
+                }
+                
+                this.showQuickEditor=showQuickEditor;
+                this.showCommentEditor=showCommentEditor;
+                this.showFullEditor=showFullEditor;
             }
             
             function FieldsManager(){
@@ -158,7 +196,7 @@
             setupRpc(options.rpcurl);
             var fieldsManager = new FieldsManager();
             var queue = new Queue();
-            
+            var popupManager = new PopupManager();
             return this.each(function(){
                 var justSaved;
                 $('table.tickets tbody tr', this).each(function(){
@@ -199,8 +237,8 @@
                                         },
                                         placeholder : '&lt;n/a&gt;',
                                         type : type,
-                                        submit : '<a class="field-editor-save">&nbsp;</a>',
-                                        cancel : '<a class="field-editor-cancel">&nbsp;</a>',
+                                        submit : '<a class="s-icon s-icon-inline-save t-inline-edit-button" title="Save" href="#">Save</a>',
+                                        cancel : '<a class="s-icon s-icon-inline-cancel t-inline-edit-button" title="Cancel" href="#">Cancel</a>',
                                         onedit : function(){//do not save ticket, while we have editor open
                                             if(justSaved==$col){
                                                 return false
@@ -213,9 +251,52 @@
                                     }
                                 );
                             }
+                            if($col.is(':last-child')){
+                                $col.addClass('t-menu');
+                                $col.html(
+                                    '<span>'+$col.html()+'</span>\n'+
+                                    '<ul class="s-icon-bar" style="display: none;">'+
+                                        '<li><a title="Quick view/edit" class="s-icon-button s-icon s-icon-edit-quick" href="#">View</a></li>'+
+                                        '<li><a title="Full view/edit" class="s-icon-button s-icon s-icon-edit" href="#">Edit</a></li>'+
+                                        '<li><a title="Comments" class="s-icon-button s-icon s-icon-comments" href="#">Comments</a></li>'+
+                                        (settings.timerurl!='' ? '<li><a href="'+settings.timerurl+'?title='+encodeURIComponent('#'+ticket.id+' '+ ticket.summary)+'">Time Track</a></li>' : '')+
+                                    '</ul>');
+                                $col.find('.s-icon-edit-quick').click(function(){
+                                    popupManager.showQuickEditor(ticketNum);
+                                });
+                                $col.find('.s-icon-edit').click(function(){
+                                    popupManager.showFullEditor(ticketNum);
+                                });
+                                $col.find('.s-icon-comments').click(function(){
+                                    popupManager.showCommentEditor(ticketNum);
+                                });
+                            }
                         });
                         log('ticket-object', ticket);
                         tickets[ticketNum] = ticket;
+                        $row.hover(
+                            function(){
+                                var sitem = $(this);
+                                sitem.addClass('hover');
+                                setTimeout(function() {
+                                        if (sitem.hasClass('hover')) {
+                                            var menu = sitem.find('.s-icon-bar');
+                                            menu.fadeIn();
+                                            menu.parent().find('span').fadeOut('fast');
+                                        }
+                                    }, 500
+                                );
+                                
+                            },
+                            function(){
+                                var sitem = $(this);
+                                sitem.removeClass('hover');
+                                var menu = sitem.find('.s-icon-bar');
+                                menu.fadeOut('fast');
+                                menu.parent().find('span').fadeIn('fast');
+                            }
+                        );
+
                     }
                 });
                 log('all-found-tickets', tickets);

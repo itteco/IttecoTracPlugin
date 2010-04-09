@@ -1,0 +1,190 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+<xi:include href="layout.html" />
+<?python from itteco.utils.render import * ?>
+<head>
+    <title>Whiteboard</title>
+    <!-- jquery / whiteboard -->
+    <script type="text/javascript" src="${href()}/chrome/itteco/js/debug/stuff/swfobject.js"></script>
+    <script type="text/javascript" src="${chrome.htdocs_location}js/wikitoolbar.js"></script>
+    <script type="text/javascript">/*<![CDATA[*/
+        $(document).ready(function() {
+            var whiteboard_context = {
+                'board'     : '$current_board_type',
+                'milestone' : document.location.hash.substr(1),
+                'level'     : $.cookie('level')||'',
+                'show_completed' : $.cookie('show_completed')||false,
+                'show_sub_mils'  : $.cookie('show_sub_mils')||false,
+                'owner'    : $.cookie('owner')||'all',
+                'ticket_type': 'all'
+            };
+            
+            function resetWhiteboard(){
+                $('#whiteboard-content').whiteboard('reset');
+            }
+            
+            function redrawWhiteboard(){
+                $('#whiteboard-content').whiteboard('redraw');
+            }
+
+            $('#whiteboard-content').whiteboard(
+                whiteboard_context,
+                ${js_encode(wbconfig)}, 
+                {
+                    avatarResolver : function(options, owner){
+                        return "https://ws.itteco.net/itteco-ws/people/"+owner+"/avatar";
+                    },
+                    timerurl : "${timetrack_base or ''}"
+                }
+            );
+            
+            $('.context-toggle > a[wb-ctx-attribute]').each(function(){
+                var a = $(this);
+                if(whiteboard_context[a.attr('wb-ctx-attribute')]=='true'){
+                    a.addClass('selected');
+                }
+            });
+            $('.s-filterbar input:checkbox').change(function(){
+                var c = $(this);
+                var attr_name = c.attr('wb-ctx-attribute');
+                whiteboard_context[attr_name] = ! whiteboard_context[attr_name];
+                $.cookie(attr_name, whiteboard_context[attr_name]);
+                resetWhiteboard();
+                return false;
+            }).each(function(){
+                var c = $(this);
+                var attr_name = c.attr('wb-ctx-attribute');
+                if(''+whiteboard_context[attr_name]=='true'){
+                    c.attr('checked', 'checked');
+                };
+            });
+            function onSelectChanged(obj){
+                var s = $(obj);
+                var attr_name = s.attr('wb-ctx-attribute');
+                console.log('changed', s.val(), this);
+                whiteboard_context[attr_name] = s.val();
+                $.cookie(attr_name, s.val());
+                if(s.attr('redraw-only')){
+                    redrawWhiteboard();
+                }else{
+                    resetWhiteboard();
+                }
+            }
+            $('.context-toggle > select').each(function(){
+                $.fn.handleMSDropDownChange(this, onSelectChanged);
+            });
+            $.fn.handleMSDropDownChange(
+                $('#smile-filterbar-milestone').val(whiteboard_context.milestone).get(0),
+                function(obj){
+                    var s = $(obj);
+                    document.location.hash = '#'+s.val();
+                    onSelectChanged(obj);
+                }
+            );
+            $('#smile-filterbar-boardtype a').click(function(){
+                document.location = this.href+document.location.hash;
+                return false;
+            });
+            $('.s-filterbar-button-reload').click(function(){
+                resetWhiteboard();
+                return false;
+            });
+            $('.s-filterbar select').msDropDown();
+        });
+    /*]]>*/
+    </script>
+</head>
+<body>   
+    <div py:def="render_milestones(items, level)" py:strip="">
+        <py:if test="items">
+            <option py:if="level==0" value=''>Backlog (no milestone)</option>
+            <py:for each="item in items">
+                <option value="${item.name}">${'&nbsp;'*level*2}${item.name}[${item.level['label']}]</option>
+                ${render_milestones(item.kids, level +1)}
+            </py:for>
+        </py:if>
+    </div>
+    
+    <!-- filterbar -->
+    <div class="s-nav">
+        <h2>Whiteboard</h2>
+        <ul class="s-filterbar">
+            <li>
+                <ul id="smile-filterbar-boardtype" class="s-filterbar-buttonset">
+                    <li>
+                        <a href="${href.whiteboard('team_tasks')}" class="s-filterbar-button first-child ${current_board_type=='team_tasks' and 'selected' or None}">Team Tasks</a>
+                    </li>
+                    <li>
+                        <a href="${href.whiteboard('stories')}" class="s-filterbar-button ${current_board_type=='stories' and 'selected' or None}">Stories</a>
+                    </li>
+                    <li>
+                        <a href="${href.whiteboard('burndown')}" class="s-filterbar-button last-child ${current_board_type=='burndown' and 'selected' or None}">Burndown</a>
+                    </li>
+                </ul>
+            </li>
+            <li py:if="current_board_type=='stories'" class="context-toggle">
+                <select id="smile-filterbar-milestone-level" wb-ctx-attribute="level">
+                    <option value="$level" py:for="level in milestone_levels">$level</option>
+                </select>
+            </li>
+            <li py:if="current_board_type!='stories'" class="context-toggle">
+                <select id="smile-filterbar-milestone" wb-ctx-attribute="milestone">
+                    ${render_milestones(structured_milestones, 0)}
+                </select>
+            </li>
+            <li py:if="current_board_type!='burndown'" class="context-toggle" redraw-only="true">
+                <select id="smile-filterbar-team-memeber" wb-ctx-attribute="owner">
+                    <option value="all">All</option>
+                    <option value="$member" py:for="member in team">$member</option>
+                    <option value="${req.authname}">me</option>
+                </select>
+            </li>
+            <li py:if="ticket_types" class="context-toggle">
+                <select id="smile-filterbar-ticket-type" wb-ctx-attribute="ticket_type" redraw-only="true">
+                    <option value="all">All</option>
+                    <option value="$ticket_type" py:for="ticket_type in ticket_types">$ticket_type</option>
+                </select>
+            </li>
+            <li py:if="current_board_type=='team_tasks'">
+                <input type="checkbox" id="smile-filterbar-sub-milestone" wb-ctx-attribute="show_sub_mils"/>
+            </li>
+            <li py:if="current_board_type=='team_tasks'">
+                <label for="smile-filterbar-sub-milestone">Inherited tickets</label>
+            </li>                          
+
+            <li>
+                <input type="checkbox" id="smile-filterbar-completed-milestones" wb-ctx-attribute="show_completed"/>
+            </li>
+            <li>
+                <label for="smile-filterbar-completed-milestones">Closed milestones</label>
+            </li>                          
+            <li>
+                <a href="#" class="s-filterbar-button s-filterbar-button-icon s-filterbar-button-reload"><span>Reload</span></a>
+            </li>
+        </ul>
+    </div>                
+    <!-- /filterbar -->
+
+    <div id="whiteboard-content" class="s-content" content-area="true"></div>
+   <script type="text/javascript">
+   
+        // init tickets
+        
+        var tickets = $('.w-ticket');
+        tickets.addClass('s-widget-nofx').addClass('s-widget-collapsed');
+        $('.w-story-section .w-ticket:last-child').removeClass('s-widget-collapsed');
+    
+        tickets.smileWidget({
+            widgetHandler: 	'.w-ticket-header',
+            widgetBody: 	'.w-ticket-body'
+        });
+        
+        // zoom avatars
+        $('.s-avatar').smileZoom();
+   
+   </script>
+
+</body>
+</html>

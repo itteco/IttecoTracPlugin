@@ -1,73 +1,83 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:py="http://genshi.edgewall.org/"
-      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip=""> 
-    <div id="popup-event-editor" class="popup-form"
-         py:with="exists=event and event.id or None; edit_disabled = event and not event.own and 'disabled' or None">
-         <form>
-          <table border="1">
-            <tr class="parameter">
-                <th><label for="event_name">Name:</label></th>
-                <td><input id="event_name" type="text" name="name" value="${event and event.name or None}" disabled="${edit_disabled}"/></td>
-            </tr>
-            <tr class="parameter" py:if="not (event and event.id or None)">
-                <th><label for="event_calendar">Calendar:</label></th>
-                <td>
-                    <select id="event_calendar" name="calendar" disabled="${edit_disabled}">
-                        <option py:for="cal in calendars" value="${cal.id}" selected="${event.calendar==cal.id or None}">${cal.name}</option>
-                    </select>
-                </td>
-            </tr>
-            <tr class="parameter">
-                <th><label for="event_time">Duration:</label></th>
-                <td>
-                    <input type="checkbox" id="allday" name="allday" checked="${event and event.allDay and 'checked' or None}" />
-                    <label for="allday">All Day</label><br/>
-                    <input id="start" type="hidden" name="start" value="${event.start}"/>
-                    <input id="end"   type="hidden" name="end" value="${event.end}"/>
-                    
-                    <input id="dtstart" class="date-picker-target dates-item-date" type="text" name="dtstart" disabled="${edit_disabled}"/>
-                    <input id="dtend" class="date-picker-target dates-item-date" type="text" name="dtend" disabled="${edit_disabled}"/>
-                </td>
-            </tr>
-            <tr class="parameter">
-                <th><label for="event_description">Description:</label></th>
-                <td>
-                    <textarea id="event_description" name="description" disabled="${edit_disabled}">${event and event.description or None}</textarea>
-                </td>
-            </tr>
-            <tr class="parameter">
-                <th><label for="event_ticket">Ticket:</label></th>
-                <td>
-                    <select id="event_ticket" name="ticket" disabled="${edit_disabled}">
-                        <option value=""></option>
-                        <option py:for="ticket in tickets" value="${ticket.ticketId}" selected="${event and event.ticket==ticket.ticketId or None}">${ticket.summary}</option>
-                    </select>
-                </td>
-            </tr>
-            <tr class="parameter">
-                <th><label>Time information:</label></th>
-                <td>
-                    <input type="checkbox" id="timetrack" name="timetrack" checked="${event and event.timetrack and 'checked' or None}" />
-                    <label for="event_timetrack">Enabled</label>
-                    <div id="time-track-container">
-                        <input type="checkbox" id="auto" name="auto" checked="${event and event.auto and 'checked' or None}" />
-                        <label for="auto">Auto</label><br/>
-                        
-                        <label for="time">Time:</label>
-                        <input id="time" type="text" name="time" value="${event and event.time or None}"/>
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+<!-- container -->
+<div class="p-container">
+    <!-- header -->
+    <div class="p-header">
+        <div class="p-header-bl">
+            <div class="p-header-br">
+                <h1>Event Properties</h1>
+            </div>
+        </div>
+    </div>
+    <!-- /header -->
+    <!-- content -->
+    <div id="popup-event-editor" class="p-content">
+        <form>
+            <div class="s-form"
+                py:with="exists=event and event.id or None; edit_disabled = event and not event.own and 'disabled' or None">
+                <div class="s-form-row">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"><label for="event_name">Name</label></div>
+                    <div class="s-form-cell s-form-item-xl">
+                        <input id="event_name" type="text" name="name" value="${event and event.name or None}" disabled="${edit_disabled}"/>
                     </div>
-                </td>
-            </tr>
-          </table>
+                </div>              
+                <div class="s-form-row" py:if="not (event and event.id or None)">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"><label for="event_calendar">Calendar</label></div>
+                    <div class="s-form-cell s-form-item-xl">
+                        <select id="event_calendar" name="calendar" disabled="${edit_disabled}">
+                            <option py:for="cal in calendars" value="${cal.id}" selected="${event.calendar==cal.id or None}">${cal.name}</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="s-form-row">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"><label for="event_time">Duration</label></div>
+                    <div class="s-form-group">
+                        <div class="s-form-cell">
+                            <input type="checkbox" id="allday" name="allday" checked="${event and event.allDay and 'checked' or None}" />
+                            <label for="allday">All Day</label>
+                            <input id="start" type="hidden" name="start" value="${event.start}"/>
+                            <input id="end"   type="hidden" name="end" value="${event.end}"/>
+                        </div>
+                    </div>
+                </div>
+                <div class="s-form-row">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"></div>
+                    <div class="s-form-group">
+                        <div class="s-form-cell"><input id="dtstart" class="date-picker-target dates-item-date" type="text" name="dtstart" disabled="${edit_disabled}"/></div>
+                        <div class="s-form-cell"><input id="dtend" class="date-picker-target dates-item-date" type="text" name="dtend" disabled="${edit_disabled}"/></div>
+                    </div>
+                </div>
 
-          <div class="buttons">
-            <input type="button" value="Cancel" class="cancel"/>
-            <input value="Save" type="submit" class="button-save" />
-          </div>
-          
-          <input type="hidden" name="calendar" value="${event.calendar}" py:if="event and event.id"/>
-          <input py:if="exists" type="hidden" name="id" value="${event.id}"/>
+                <div class="s-form-row">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"><label for="event_description">Description</label></div>
+                    <div class="s-form-cell s-form-item-xl">
+                        <textarea id="event_description" name="description" disabled="${edit_disabled}">${event and event.description or None}</textarea>
+                    </div>
+                </div>
+                <div class="s-form-row">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"><label for="event_ticket">Ticket</label></div>
+                    <div class="s-form-cell s-form-item-xl">
+                        <select id="event_ticket" name="ticket" disabled="${edit_disabled}">
+                            <option value=""></option>
+                            <option py:for="ticket in tickets" value="${ticket.ticketId}" selected="${event and event.ticket==ticket.ticketId or None}">${ticket.summary}</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="s-buttons p-footer">
+					<div class="s-buttons-item">
+						<input type="button" value="Cancel" class="s-button s-button-cancel"/>
+					</div>
+					<div class="s-buttons-item">
+						<input value="Save" type="submit" class="s-button s-button-save" />
+					</div>
+                </div>
+              
+                <input type="hidden" name="calendar" value="${event.calendar}" py:if="event and event.id"/>
+                <input py:if="exists" type="hidden" name="id" value="${event.id}"/>
+            </div>
         </form>
         <script type="text/javascript">/*<![CDATA[*/
         var parseDate = $.fullCalendar.parseISO8601;
@@ -87,26 +97,6 @@
             }
                       
             var root = $(rootSel);
-
-            function toggleTimeTrackContainer(){
-                $('#time-track-container').toggle($('#timetrack:checked').length>0);
-            }
-            function toggleTimeTrackTime(){
-                var HOUR_S = 3600,
-                    MINUTE_S = 60;
-
-                if($('#auto:checked').length>0){
-                    var duration = $('#end').val()  - $('#start').val();
-                    var hours = Math.floor(duration / HOUR_S);
-                    var minutes = Math.floor((duration % HOUR_S) / MINUTE_S);
-                    if(minutes < 10){
-                        minutes = '0'+minutes;
-                    }
-                    $('#time').attr('disabled', 'disabled').val( hours+':'+minutes);
-                }else{
-                    $('#time').attr('disabled', '');
-                }
-            }
     
             function setupCallback(root){
                 if(popup_context && popup_context.setup){
@@ -154,7 +144,6 @@
                         var newEnd = new Date(start.getTime()+duration);
                         this.setEnd(newEnd);
                     }
-                    toggleTimeTrackTime();
                 }
                 function setEnd(date){
                     date = parseDateIfNedded(date);
@@ -176,7 +165,6 @@
                     }else{
                         duration = end.getTime()-start.getTime();
                     }
-                    toggleTimeTrackTime();
                 }
                 function setup(){
                     dateFields.datepicker({
@@ -225,15 +213,8 @@
                         );
                     }catch(e){}
                     return false;
-                });
-                $('#timetrack').bind('change', {}, function(){
-                    toggleTimeTrackContainer();
-                });
-                $('#auto').bind('change', {}, function(){
-                    toggleTimeTrackTime();
-                });
-                
-                $('.cancel', root).click(function(){
+                });                   
+                $('.s-button-cancel', root).click(function(){
                     popup_context.cancel();
                 });
                 
@@ -278,8 +259,6 @@
             function init(root){
                 setupCallback(root);
                 datesManager = new DatesManager();
-                toggleTimeTrackContainer();
-                toggleTimeTrackTime();
                 bindHandlers();
                 setupRpc(sysUrl);
             }
@@ -295,6 +274,6 @@
             "${href.login('xmlrpc')}"
         );
         /*]]>*/</script>
-
     </div>
+</div>
 </html>

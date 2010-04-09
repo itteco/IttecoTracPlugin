@@ -1,0 +1,114 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude" py:strip="">
+<!-- container -->
+<div class="p-container">
+    <!-- header -->
+    <div class="p-header">
+        <div class="p-header-bl">
+            <div class="p-header-br">
+                <h1>Calendar Properties</h1>
+            </div>
+        </div>
+    </div>
+    <!-- /header -->
+    <!-- content -->
+    <div id="popup-calendar-editor" class="p-content" py:with="exists=calendar and calendar.id or None">
+        <form>
+        <!-- form -->
+            <div class="s-form p-form-ticket-edit">
+                <div class="s-form-row">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"><label for="calendar_name">Name</label></div>
+                    <div class="s-form-cell"><input id="calendar_name" type="text" name="name" value="${calendar and calendar.name or None}" disabled="${edit_disabled}"/></div>
+                </div>
+                <div class="s-form-row" py:if="not exists or (calendar and calendar.own)">
+                    <div class="s-form-cell s-form-cell-primary s-form-label"></div>
+                    <div class="s-form-cell">
+                        <input type="checkbox" id="shared" name="shared" checked="${calendar and calendar.type=='S' and 'checked' or None}" />
+                        <label for="shared">Share with everyone</label>
+                    </div>
+                </div>
+
+                <div class="s-buttons p-footer">
+					<div class="s-buttons-item">
+						<input type="button" value="Cancel" class="s-button s-button-cancel"/>
+					</div>
+					<div class="s-buttons-item">
+						<input value="Save" type="submit" class="s-button s-button-save" />
+					</div>
+                </div>
+              
+                  <input type="hidden" name="id" value="${calendar.id}" py:if="exists"/>
+                  <input type="hidden" name="theme" value="${calendar.theme}"/>
+                  <input type="hidden" name="type" value="${calendar.type}"/>
+                  <input type="hidden" name="ref" value="${calendar.ref}"/>
+            </div>
+        </form>
+        <script type="text/javascript">/*<![CDATA[*/        
+        function calendarFormManager(rootSel, sysUrl){ 
+            var rpc;                     
+            var root = $(rootSel);
+    
+            function setupCallback(root){
+                if(popup_context && popup_context.setup){
+                    popup_context.setup(root);
+                }
+            }
+           
+            function bindHandlers(){
+                $('form', root).submit(function(){
+                    try{
+                        var vo = {}, arr = $(this).serializeArray();
+                        for(i in arr){
+                            vo[arr[i].name]=arr[i].value || '';
+                        }
+                        rpc.calendar.save(
+                            function(resp){
+                                popup_context.done(resp.result);
+                                return false;
+                            },
+                            vo['id'] || '',
+                            vo['name'],
+                            vo['theme'] || 1,
+                            vo['shared'] || false ? 'S' : vo['type'],
+                            vo['ref'] || 0
+                        );
+                    }catch(e){}
+                    return false;
+                });               
+                $('.s-button-cancel', root).click(function(){
+                    popup_context.cancel();
+                });
+            }
+                       
+            function setupRpc(url){
+                rpc = $.rpc(
+                   url,
+                   "xml",
+                   function(server) {
+                        if(!server || !server.system) {
+                            alert("Could not get the rpc object ..");
+                            return;
+                        }
+                    }
+                );
+
+            }
+            function init(root){
+                setupCallback(root);
+                bindHandlers();
+                setupRpc(sysUrl);
+            }
+            
+            init(root);
+        };
+        calendarFormManager(
+            "#popup-calendar-editor",
+            "${href.login('xmlrpc')}"
+        );
+        /*]]>*/</script>
+
+    </div>
+</div>
+</html>

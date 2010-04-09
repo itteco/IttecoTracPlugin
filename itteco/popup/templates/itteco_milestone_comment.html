@@ -26,16 +26,14 @@
             }
         }
         
-        function handleTicketResp(resp){
-            var tkt = resp.result[3];
-            tkt.id = resp.result[0];
-            notify(tkt);
+        function handleMilestoneResp(resp){
+            notify(resp.result);
         }
 
-        function commentTicket(id, comment){
-            rpc.ticket.update(
-                handleTicketResp,
-                Number(id),
+        function commentMilestone(id, comment){
+            rpc.structured_milestone.update(
+                handleMilestoneResp,
+                id,
                 comment
             );
         }
@@ -44,8 +42,8 @@
             log('bindHandlers', $('form', root));
             $('form', root).submit(function(){
                 try{
-                    commentTicket(
-                        $(":input[name='ticket']", root).val(),
+                    commentMilestone(
+                        $(":input[name='milestone']", root).val(),
                         $(":input[name='comment']", root).val()
                     );
                 }catch(e){log('action-failed with exception', e);}
@@ -125,14 +123,14 @@
         <div class="p-header">
         	<div class="p-header-bl">
             	<div class="p-header-br">
-	        		<h1>Ticket #${ticket.id} - Comments</h1>
+	        		<h1>Milestone ${milestone.name} - Comments</h1>
                 </div>
         	</div>
         </div>
         <!-- /header -->
 		<!-- content -->
 		<form>
-			<div class="p-content">
+			<div class="p-content" py:with="ticket = milestone.ticket">
 				<!-- scroller -->
 				<div class="p-scroller">
 					<!-- /timeline -->
@@ -156,7 +154,7 @@
 					
 				<!-- leave comment -->
 				<div class="s-history-comment">
-
+					
 					<div class="s-form">
 						<label for="comment">Add Comment</label>
 						<textarea class="s-form-item wikitext" name="comment" id="comment">${comment}</textarea>
@@ -183,7 +181,7 @@
 				</div>
 				<!-- leave comment -->                                     
 			</div>
-			<input type="hidden" name="ticket" value="${ticket.id}"/>
+			<input type="hidden" name="milestone" value="${milestone.name}"/>
         </form>
     </div>
 </body>

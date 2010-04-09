@@ -1,4 +1,7 @@
-from trac.db import Table, Column, Index, DatabaseManager
+from datetime import datetime
+from trac.db import Table, Column, Index, DatabaseManager, get_column_names
+from trac.util.datefmt import utc, to_timestamp
+
 _view_sql = """
     CREATE VIEW all_cal_events AS
     SELECT ''||id as id, title as title, description as description, calendar_id as calendar_id,
@@ -62,6 +65,7 @@ def do_upgrade(env, db, installed_version):
     upgrade_to_0_2_2(env, db, installed_version)
     upgrade_to_0_2_3(env, db, installed_version)
     upgrade_to_0_2_4(env, db, installed_version)
+    upgrade_to_0_2_5(env, db, installed_version)
     return True
 
 def upgrade_to_0_2_0(env, db, installed_version):
@@ -165,3 +169,59 @@ def upgrade_to_0_2_4(env, db, installed_version):
             cursor.execute(stmt)
 
     return True
+    
+def upgrade_to_0_2_5(env, db, installed_version):
+    if installed_version>=[0,2,5]:
+        return True
+    db = db or env.get_db_cnx()
+    cursor = db.cursor()
+    now = to_timestamp(datetime.now(utc))
+    cursor.execute("INSERT INTO ticket (type, status, summary, description, time, changetime) "
+                       " SELECT '$milestone$', 'new', name, description, %s, %s"
+                         " FROM milestone m"
+                        " WHERE NOT EXISTS ("
+                                " SELECT 1"
+                                  " FROM ticket t" 
+                                 " WHERE t.type='$milestone$'"
+                                   " AND t.summary=m.name)", (now, now))
+    cursor.execute("UPDATE ticket"
+                     " SET status='finished'"
+                   " WHERE status='new'"
+                     " AND type='$milestone$'"
+                     " AND EXISTS ("
+                            " SELECT 1"
+                              " FROM milestone m"
+                             " WHERE summary=m.name"
+                               " AND COALESCE(m.completed,0)<>0)")
+    cursor.execute("SELECT * FROM milestone as tab LIMIT 1")
+    col_names = get_column_names(cursor)
+    if 'started' in col_names:
+        cursor.execute("UPDATE ticket"
+                         " SET status='started'"
+                       " WHERE status='new'"
+                         " AND type='$milestone$'"
+                         " AND EXISTS ("
+                                " SELECT 1"
+                                  " FROM milestone m"
+                                 " WHERE summary=m.name"
+                                   " AND COALESCE(m.started,0)<>0)")
+        cursor.execute("INSERT INTO ticket_custom (ticket, name, value)"
+                        " SELECT t.id, 'started', m.started"
+                          " FROM ticket t, milestone m"
+                         " WHERE t.type='$milestone$'"
+                           " AND t.summary=m.name"
+                           " AND COALESCE(m.started,0)<>0")
+                           
+        cursor.execute("UPDATE ticket"
+                         " SET milestone = (SELECT parent FROM milestone_struct WHERE name=summary)"
+                       " WHERE type='$milestone$'")
+
+    trac_cfg = env.config['trac']
+    policies = trac_cfg.get('permission_policies') or ''
+    for policy in ('CalendarSystem', 'HideMilestoneTicketPolicy'):
+        if policies:
+            policies = ','.join([policy, policies])
+        else:
+            policies = policy
+    trac_cfg.set('permission_policies', policies)
+    env.config.save()

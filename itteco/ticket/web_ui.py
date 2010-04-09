@@ -10,7 +10,6 @@ from trac.resource import Resource
 from trac.ticket import Ticket, Type
 from trac.ticket.web_ui import TicketModule
 from trac.timeline.api import ITimelineEventProvider
-from trac.search.web_ui import SearchModule
 from trac.util.datefmt import to_timestamp, utc
 from trac.util.translation import _
 from trac.util.text import to_unicode
@@ -24,6 +23,22 @@ from itteco.ticket.model import TicketLinks, StructuredMilestone
 from itteco.ticket.utils import get_fields_by_names, get_tickets_by_ids
 from itteco.utils.json import write
 from itteco.utils.render import hidden_items, add_jscript
+
+class RedirectInterceptor(object):
+    def __init__(self, req, mapper):
+        self.req = req
+        self.mapper = mapper
+        
+    def redirect(self, url):
+        req = object.__getattribute__(self, 'req')
+        mapper = object.__getattribute__(self, 'mapper')
+        req.redirect(mapper(req, url))
+        
+    def __getattribute__(self, name):
+        if name=='redirect':
+            return object.__getattribute__(self, name)
+            
+        return getattr(object.__getattribute__(self, 'req'), name)
 
 class IttecoTicketModule(Component):
     implements(ITemplateStreamFilter, ITimelineEventProvider, IRequestFilter)
@@ -44,15 +59,17 @@ class IttecoTicketModule(Component):
                 return isinstance(ids, basestring) and (ids,) or ids
                 
             links = TicketLinks(self.env, ticket)
-            links.outgoing_links = [int(id) for id in get_ids(req, 'links_ticket')]
-            links.wiki_links = get_ids(req, 'links_wiki')
+            links.outgoing_links = [int(id) for id in get_ids(req, 'ticket_links')]
+            links.wiki_links = get_ids(req, 'wiki_links')
             links.save()
-        return req.args['original_handler'].process_request(req)
+        return req.args['original_handler'].process_request(RedirectInterceptor(req, self._get_jump_to_url))
                     
     def post_process_request(self, req, template, data, content_type):
+        self.env.log.debug('post_process_request req=%s, pathinfo=%s, args=%s' % (req, req.path_info, req.args))
         if req.path_info.startswith('/ticket/') \
             or req.path_info.startswith('/newticket') \
-            or req.path_info.startswith('/milestone'):
+            or req.path_info.startswith('/milestone') \
+            or req.path_info.startswith('/roadmap'):
             
             add_stylesheet(req, 'itteco/css/common.css')
             add_jscript(
@@ -60,25 +77,58 @@ class IttecoTicketModule(Component):
                 [
                     'stuff/ui/ui.core.js',
                     'stuff/ui/ui.resizable.js',
+                    'stuff/ui/ui.draggable.js',
+                    'stuff/ui/ui.droppable.js',
                     'custom_select.js'
                 ],
                 IttecoEvnSetup(self.env).debug
             )
-        if req.path_info.startswith('/ticket/'):
+        if template=='ticket.html':
             add_jscript(
                 req, 
                 [
                     'stuff/ui/ui.draggable.js',
                     'stuff/ui/ui.droppable.js',
-                    'dndsupport.js'
+                    'stuff/plugins/jquery.rpc.js',
+                    'references.js'
                 ],
                 IttecoEvnSetup(self.env).debug
             )
             tkt = data['ticket']
             links = TicketLinks(self.env, tkt)
             data['filters']=self._get_search_filters(req)
-            data['ticket_links'] = links            
+            data['ticket_links'] = {
+                'incoming' : {
+                    'title':'Referred by:',
+                    'blockid':'inblock', 
+                    'removable': False, 
+                    'links': self._ids_to_tickets(links.incoming_links)
+                },
+                'outgoing' : {
+                    'title':'Refers to:', 
+                    'blockid':'outblock', 
+                    'removable': True, 
+                    'links': self._ids_to_tickets(links.outgoing_links)
+                },
+                'wiki' : links.wiki_links
+            }
+            
+            return 'itteco_ticket.html', data, content_type
+
         return template, data, content_type
+        
+    def _get_jump_to_url(self, req, original_url):
+        jump_target = req.args.get('jump_to')
+        
+        if 'original_handler' not in req.args or jump_target is None or jump_target=='stay':
+            return original_url
+        
+        if jump_target=='reports' and req.session.get('query_href'):
+            return req.session.get('query_href')
+            
+        if jump_target=='whiteboard':
+            return req.href.whiteboard('team_tasks')+'#'+req.args.get('field_milestone', '')
+        return original_url
     
     def filter_stream(self, req, method, filename, stream, data):
         chrome = Chrome(self.env)
@@ -97,34 +147,21 @@ class IttecoTicketModule(Component):
             
         if 'ticket' in data:
             tkt = data['ticket']
-            mydata ={'structured_milestones':StructuredMilestone.select(self.env),
-                 'milestone_name': data['ticket']['milestone'],
-                 'field_name' : 'field_milestone',
-                 'hide_completed' : not ( tkt.exists and 'TICKET_ADMIN' in req.perm(tkt.resource))
-                 }
+            mydata ={
+                'structured_milestones':StructuredMilestone.select(self.env),
+                'milestone_name': data['ticket']['milestone'],
+                'field_name' : 'field_milestone',
+                'hide_completed' : not ( tkt.exists and 'TICKET_ADMIN' in req.perm(tkt.resource))
+            }
             req.chrome.setdefault('ctxtnav',[]).insert(
-                -1, tag.a(
+                -1, 
+                tag.a(
                     _('Go To Whiteboard'), 
-                    href=req.href.whiteboard('team_tasks', data['ticket']['milestone'] or 'none')))
+                    href=req.href.whiteboard('team_tasks', data['ticket']['milestone'] or 'none')
+                )
+            )
             stream |=Transformer('//*[@id="field-milestone"]').replace(
                 chrome.render_template(req, 'itteco_milestones_dd.html', mydata, fragment=True))
-
-        if 'ticket_links' in data:
-            mydata = dict()
-            mydata['in_links'] = {'title':'Referred by:', 'blockid':'inblock', 
-                'removable': False, 'links': self._ids_to_tickets(data['ticket_links'].incoming_links)}
-            mydata['out_links'] = {'title':'Refers to:', 'blockid':'outblock', 
-                'removable': True, 'links': self._ids_to_tickets(data['ticket_links'].outgoing_links)}
-            mydata['wiki_links']= data['ticket_links'].wiki_links
-            mydata['filters']=data.get('filters',[])
-            stream |=Transformer('//*[@id="ticket"]').append(
-                chrome.render_template(req, 'itteco_links.html', mydata, fragment=True))
-            if req.args.get('action')!='diff':
-                stream |=Transformer('//*[@id="content"]').after(
-                    chrome.render_template(req, 'itteco_search_pane.html', mydata, fragment=True));
-            stream |= Transformer('//*[@id="propertyform"]').append( \
-                tag(hidden_items('links_ticket', data['ticket_links'].outgoing_links), \
-                    hidden_items('links_wiki', data['ticket_links'].wiki_links)))
         return stream
         
     def _ids_to_tickets(self, ids):
@@ -133,10 +170,11 @@ class IttecoTicketModule(Component):
             fields = get_fields_by_names(self.env, 'summary')
             tickets = []
             for tkt_info in get_tickets_by_ids(self.env.get_db_cnx(), fields, ids):
-                tkt_info['idx'] ='%02d' % all_types.index(tkt_info['type']) 
+                tkt_info['idx'] ='%02d' % all_types.index(tkt_info['type'])
                 tickets.append(tkt_info)
             tickets.sort(key= lambda x: '%s %s' % (x['idx'], x['id']))
             return tickets
+        return []
 
     def get_ticket_search_results(self, req):
         req.args['ticket']=1
@@ -146,11 +184,28 @@ class IttecoTicketModule(Component):
     def _get_search_filters(self, req):
         filters = []
         if TicketModule(self.env).get_search_filters(req) is not None:
-            filters += [{'name': ticket.name, 'label':ticket.name, 'active': True } 
-                for ticket in Type.select(self.env)]
+            filters.extend(
+                [
+                    {
+                        'name': ticket.name, 
+                        'label':ticket.name, 
+                        'active': True
+                    }
+                    for ticket in Type.select(self.env)
+                ]
+            )
         wikifilters = WikiModule(self.env).get_search_filters(req)
         if wikifilters:
-            filters += [{'name': f[0], 'label':f[1], 'active': True } for f in wikifilters]
+            filters.extend(
+                [
+                    {
+                        'name': f[0], 
+                        'label':f[1], 
+                        'active': True
+                    }
+                    for f in wikifilters
+                ]
+            )
         return filters
         
     # ITimelineEventProvider methods
@@ -199,37 +254,3 @@ class IttecoTicketModule(Component):
                     
     def render_timeline_event(self, context, field, event):
         pass#we are delegating rendering to standard trac TicketModule
-
-class JSonSearchtModule(Component):
-    implements(IRequestHandler)
-
-    def match_request(self, req):
-        return req.path_info.startswith('/jsonsearch')
-
-    def process_request(self, req):
-        all_types = [ticket.name for ticket in Type.select(self.env)]       
-        types = [t for t in all_types if req.args.has_key(t)]
-        if types:
-            req.args['ticket']=1
-        template, data, arg = SearchModule(self.env).process_request(req)
-        results = [ res for res in data['results']]
-        filtered_res =[]
-        for res in results:
-            res['type']=res['href'].split('/')[-2]
-            if(res['type']=='ticket'):
-                #hack to avoid database access
-                match = re.match('<span .+?>(.*?)</span>:(.+?):(.*)', str(res['title']))
-                if match:
-                    ticket_type = match.group(2).strip()
-                    if not req.args.has_key(ticket_type):
-                        continue
-                    res['title']=to_unicode('%s %s:%s' % (ticket_type, match.group(1), match.group(3)))
-                    res['idx'] = '%02d' % all_types.index(ticket_type)
-            else:
-                res['title'] = to_unicode('wiki: %s' % res['title'].split(':',2)[0])
-                res['idx']=99
-            filtered_res.append(res)
-        
-        filtered_res.sort(key= lambda x: '%s %s' % (x['idx'], x['title']))
-        json_val = write(filtered_res)
-        req.write('({"items":'+json_val+'})')

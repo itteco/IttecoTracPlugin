@@ -4,7 +4,7 @@
         var settings = $.extend({}, $.fn.eventCalendar.defaults,  {target:this}, options);
 
         var ctx = {
-            managersQuantity :5,
+            managersQuantity :4,
             managers : {},
             reportReady: function(manager){
                 this.managers[manager.name]=manager;
@@ -27,7 +27,7 @@
                 this.listeners.push(listener);
             },
             tzoffset : new Date().getTimezoneOffset(),
-            debug : true
+            debug : false
         };
     
         function notifyUIChanges(){
@@ -42,57 +42,6 @@
             }
         }
         log('pre init', this, options, settings);
-        function ThemeManager(){
-            this.name = 'theme';
-            var pointer = this;
-            var themeSelector, timerId;
-            $('body').append(themeSelector=$('<ul id="theme-selector" class="theme-selector" style="position:absolute;display:none;"/>'));
-            for(var i=0; i<7; i++){
-                themeSelector.append($('<li class="event-theme-'+i+'" theme="'+i+'"><div class="toggler">&nbsp;</div></li>'));
-            }
-            function setupHiderTimer(){
-                timerId = setTimeout(
-                    function(){
-                        pointer.hide();
-                    },
-                    500
-                );
-            }
-            
-            function clearHiderTimer(){
-                clearTimeout(timerId);
-            }
-            
-            this.attach = function(obj,cal, callback){
-                var o = $(obj);
-                o.one('mouseleave', function(){
-                    setupHiderTimer();
-                });
-                themeSelector.bind('mouseenter', function(){
-                    clearHiderTimer();
-                }).bind('mouseleave',function(){
-                    setupHiderTimer();
-                });
-                
-                themeSelector.find('li').click(function(){
-                    callback($(this).attr('theme'));
-                    pointer.hide();
-                });
-                themeSelector.css(
-                        {
-                            top: o.offset().top, 
-                            left: o.offset().left
-                        }
-                ).show();
-            }
-            this.hide= function(){
-                themeSelector.find('li').andSelf().unbind();
-                themeSelector.hide();
-            }
-            
-            ctx.reportReady(this);
-        }
-
         function TransportManager(){
             this.name = 'transport';
             var pointer = this;
@@ -129,43 +78,129 @@
         function CalendarsManager(){
             this.name='calendars';
             var currentCalendar, calendars = {};
+            var themeManager = new ThemeManager();
             var calContainers = {
                 my : $(settings.my),
-                myShared: $(settings.myShared),
                 shared: $(settings.shared)
             };
         
-            log('init CalendarsManager', calContainers);
-        
-            function createDummyCalendar(type){
-                if(typeof type =='undefined'){
-                    type = 'P';
+            function ThemeManager(){
+                this.name = 'theme';
+                var pointer = this;
+                var cMenu, themeSelector, actions, del, share, edit;
+                $('body').append(cMenu=$('<div class="c-menu" style="display:none;">').append(themeSelector=$('<ul id="theme-selector" class="c-menu-colors"/>')));
+                for(var i=0; i<21; i++){
+                    themeSelector.append($('<li><a href="#" class="c-color'+i+'" theme="'+i+'">#</a></li>'));
                 }
-                return {
-                    pid   : new Date().getTime(),
-                    type  : type, 
-                    name  : '&lt;change me&gt;', 
-                    theme : 1, 
-                    own   : true,
-                    ref   : 0
-                }
-            }
-        
-            function renderCreators(){
-                var elem;
-                calContainers.my.before(elem=$('<a href="#add">add</a>'));
-                function createHandler(type){
-                    return function(){
-                        var c = createDummyCalendar(type);
-                        calendars[c.pid]=c;
-                        renderCalendars();
+                
+                cMenu.append(actions=$('<ul class="c-menu-actions">')
+                                .append(del = $('<li class="c-menu-item-delete"><a href="#">Delete</a></li>'))
+                                .append(share = $('<li><a href="#">Share</a></li>'))
+                                .append(edit= $('<li><a href="#">Edit</a></li>')));
+                            
+
+                this.attach = function(obj, cal, callback){
+                    log('attaching calendar menu', cal);
+                    var o = $(obj);
+                    var offset = o.offset();
+                    cMenu.hide().css('top',offset.top).css('left',offset.left - cMenu.width()).fadeIn(250);
+
+                    themeSelector.find('li > a').unbind().click(function(){
+                        setCalendarTheme(cal, $(this).attr('theme'));
+                        pointer.hide();
+                        return false;
+                    });
+
+                    $('a', edit).unbind().click(function(){
+                        function noop(){}
+                        function cancel(){
+                            $.fn.colorbox.close();
+                            pointer.hide();
+                            return false;
+                        }
+                        popup_context = {
+                            setup  : noop,
+                            cancel : cancel,
+                            done: function(respCal){
+                                updateLocalCalendar(respCal);
+                                return cancel();
+                            }
+                        }
+                        $.fn.colorbox(
+                            {
+                                href: settings.rootUrl+'/popup/calendars/'+cal.id,
+                                open: true,
+                                title: 'Calendar Data'
+                            }
+                        )
+
+                    });
+
+                    if(cal.own){
+                        del.show();
+                        share.show();
+                        $('a', del).unbind().click(function(){
+                            deleteCalendar(cal);
+                            pointer.hide();
+                            return false;
+                        });
+                        $('a', share).unbind().click(function(){
+                            cal.type='S';
+                            saveCalendar(cal);
+                            pointer.hide();
+                            return false;
+                        });
+                    }else{
+                        del.hide();
+                        share.hide();
                     }
+                    
+                    $(document).one('click', function(){
+                        cMenu.hide();
+                    });
+                    cMenu.show();
+                    return false;
                 }
-                elem.click(createHandler('P'));
-                calContainers.myShared.before(elem=$('<a href="#add">add</a>'));
-                elem.click(createHandler('S'));
+                this.hide= function(){
+                    themeSelector.find('li > a').andSelf().unbind();
+                    cMenu.hide();
+                }
             }
 
+            log('init CalendarsManager', calContainers);
+            
+            function initContainers(){
+                $('.s-icon-calendar-add').click(function(){
+                    function noop(){}
+                    function cancel(){
+                        $.fn.colorbox.close();
+                        return false;
+                    }
+                    popup_context = {
+                        setup  : noop,
+                        cancel : cancel,
+                        done: function(respCal){
+                            updateLocalCalendar(respCal);
+                            return cancel();
+                        }
+                    }
+                    $.fn.colorbox(
+                        {
+                            href: settings.rootUrl+'/popup/calendars/',
+                            open: true,
+                            title: 'Calendar Data'
+                        }
+                    )
+                });
+            }
+            function updateLocalCalendar(cal){
+                var cals = [];
+                cals.push(cal);
+                consumeCalendarsData(cals);
+                renderCalendars();
+                ctx.managers.events.rerenderEvents(cal.id);
+            }
+            
             function readCalendars(){
                 ctx.managers.transport.proxy.calendar.query(
                     function(resp){
@@ -273,44 +308,27 @@
                         return true;
                     }
                     var cont = calendar.own 
-                        ? (calendar.type=='S' ? calContainers.myShared : calContainers.my)
+                        ? calContainers.my
                         : calContainers.shared;
                     if(!currentCalendar && calendar.own){
                         currentCalendar = calendar;
                     }
-                    var item, calNameElem, toggler, themeToggler, remover;
+                    var item, calNameElem, trigger;
                     cont.append(item=$('<li id="calendar_'+this.id+'" class="calendar-line'+
-                        ' event-theme-' +this.theme+
-                        (this.disabled ? ' calendar-disabled' : '')+
+                        ' c-color' +this.theme+
+                        (this.disabled ? ' c-non-selected' : ' c-selected')+
                         (currentCalendar===calendar ? ' calendar-editable' : '')+'"></li>')
-                            .append(toggler=$('<input type="checkbox" checked="'+
-                                (calendar.enabled ? 'checked' :'') +
-                                '" name="toggle-calendar-'+calendar.id+'"/>'))
-                            .append(calNameElem=$('<span class="calendar-item">'+this.name+'</span>'))
-                            .append(themeToggler=$('<span class="toggler">&nbsp;</span>'))
-                            .append(remover= calendar.own ? $('<span class="remover">&nbsp;</span>') : '&nbsp;'));
-                    if(calendar.own){
-                        calNameElem.editable(function(value, options){
-                            calendar.name = value;
-                            saveCalendar(calendar);
-                            return value;
-                        });
+                            .append(trigger=$('<a href="#" class="c-mlink">#</a>'))
+                            .append(calNameElem=$('<span>'+this.name+'</span>')));
                         
-                        remover.click(function(){
-                            deleteCalendar(calendar);
-                        });
-                    }
-                    
-                    themeToggler.click(function(){
-                        var o = $(this);
-                        ctx.managers.theme.attach(o, calendar, function(theme){
-                            setCalendarTheme(calendar, theme);
-                        });
+                    calNameElem.click(function(){
+                        item.toggleClass('c-selected').toggleClass('c-non-selected');
                     });
-                    toggler.change(function(){
-                        calendar.disabled = !this.checked;
-                        item.toggleClass('calendar-disabled', calendar.disabled);
-                        ctx.managers.events.rerenderEvents(calendar.id);
+                    
+                    trigger.unbind().click(function(){
+                        var o = $(this);
+                        themeManager.attach(o, calendar);
+                        return false;
                     });           
                 });
                 notifyUIChanges();
@@ -322,7 +340,7 @@
                 }
                 return calendars[arguments[0]];
             }
-            renderCreators();
+            initContainers();
             ctx.addListener(readCalendars);
             ctx.reportReady(this);
         }
@@ -375,6 +393,133 @@
         function TicketsManager(){
             this.name = 'tickets';
             var tickets = {};
+            
+            function Menu(){
+                var tMenu, pointer = this;
+                
+                $('body').append(tMenu=$(
+                    '<div class="t-menu" style="display:none;">'+
+                        '<ul class="s-icon-bar">'+
+                            '<li><a href="#" class="s-icon-button s-icon s-icon-comments" title="Comments">Comments</a></li>'+
+                            '<li><a href="#" class="s-icon-button s-icon s-icon-edit" title="Full view/edit">Edit</a></li>'+
+                            '<li><a href="#" class="s-icon-button s-icon s-icon-edit-quick" title="Quick view/edit">View</a></li>'+
+                            '<li><a href="#" class="s-icon-button s-icon s-icon-create-event" title="Create event for this ticket">&#x00AB;</a></li>'+
+                        '</ul>'+
+                    '</div>'
+                ));
+            
+                this.attach = function(obj, ticket){
+                    log('attaching ticket menu', ticket);
+                    var o = $(obj);
+                    var offset = o.offset();
+                    tMenu.hide().css('top',offset.top).css('left',offset.left - tMenu.width()).fadeIn(250);
+                    
+                    tMenu.find('li > a').unbind();
+
+                    function noop(){}
+                    function closePopup(){
+                        $.fn.colorbox.close();
+                        pointer.hide();
+                        return false;
+                    }
+
+                    $('.s-icon-edit', tMenu).attr('href', settings.rootUrl+'/ticket/'+ticket.id);
+                    $('.s-icon-comments', tMenu).click(function(){
+                        popup_context = {
+                            setup  : noop,
+                            cancel : closePopup,
+                            done: closePopup
+                        }
+                        $.fn.colorbox(
+                            {
+                                href: settings.rootUrl+'/popup/comment/'+ticket.id,
+                                open: true,
+                                title: 'Comment Ticket'
+                            }
+                        )
+
+                    });
+                    
+                    $('.s-icon-edit-quick', tMenu).click(function(){
+                        popup_context = {
+                            setup  : noop,
+                            cancel : closePopup,
+                            done: closePopup
+                        }
+                        $.fn.colorbox(
+                            {
+                                href: settings.rootUrl+'/popup/tickets/'+ticket.id,
+                                open: true,
+                                title: 'Edit Ticket'
+                            }
+                        )
+
+                    });
+                    
+                    $('.s-icon-create-event', tMenu).click(function(){
+                        popup_context = {
+                            setup  : noop,
+                            cancel : closePopup,
+                            done: function(res){
+                                ctx.managers.events.renderEvent(res);
+                                return closePopup();
+                            }
+                        }
+
+                        var currentCalendar = ctx.managers.calendars.getCalendar();
+                        var calId = currentCalendar && currentCalendar.id || '';
+                        $.fn.colorbox(
+                            {
+                                href: settings.rootUrl+'/popup/events/?calendar='+calId+'&ticket='+ticket.id+'&date='+(Math.ceil(new Date().getTime()/30/60/1000)*30*60),
+                                open: true,
+                                title: 'Create Event'
+                            }
+                        )
+
+                    });
+
+                    $(document).one('click', function(){
+                        tMenu.hide();
+                    });
+                    tMenu.show();
+                    return false;
+                }
+                this.hide= function(){
+                    tMenu.hide();
+                }
+
+            }
+            
+            var menu = new Menu();
+            
+            log('init TicketsManager');
+            
+            function initContainer(){
+                $('.s-icon-ticket-add').unbind().click(function(){
+                    function noop(){}
+                    function cancel(){
+                        $.fn.colorbox.close();
+                        return false;
+                    }
+                    popup_context = {
+                        setup  : noop,
+                        cancel : cancel,
+                        done: function(ticket){
+                            tickets[ticket.id]=ticket;
+                            appendTicket($(settings.tickets),ticket);
+                            return cancel();
+                        }
+                    }
+                    $.fn.colorbox(
+                        {
+                            href: settings.rootUrl+'/popup/ticket/',
+                            open: true,
+                            title: 'Create Ticket'
+                        }
+                    )
+                });
+            }
+
             function readActiveTickets(){
                 ctx.managers.transport.proxy.ticketconfig.my_active_tickets(
                     function(resp){
@@ -383,6 +528,7 @@
                             log('read-ticket-header', o);
                             var tkt_id = o.ticketId;
                             multicall.push('ticket.get', tkt_id, function(tkt){
+                                tkt.id = tkt_id;
                                 tickets[tkt_id] =tkt;
                             });
                         });
@@ -392,45 +538,27 @@
                 );
             }
             
+            function appendTicket(container, ticket){
+                var tktElem, menu_trigger;
+                container.append(tktElem = $('<li id="ticket_'+ticket.id+'"/>')
+                    .append(menu_trigger=$('<a href="#" class="c-mlink">#</a>'))
+                    .append('<span><strong><a href="'+settings.rootUrl+'/ticket/'+ticket.id+'">#'+ticket.id+'</a></strong> '+ticket.summary+'</span>')
+                );
+            
+                menu_trigger.click(function(){
+                    menu.attach(this, ticket);
+                    return false;
+                });
+            }
             function renderTickets(){
                 var c = $(settings.tickets);
                 $.each(tickets, function(id,ticket){
-                    var tktElem, mover;
-                    c.append(tktElem = $('<li id="ticket_'+id+'" class="ticket"/>')
-                        .append(mover=$('<span class="ticket-mover">&#x00AB;</span>'))
-                        .append('<span class="ticket-title">#'+id+' '+ticket.summary+'</span>')
-                    );
-                    mover.click(function(){
-                        function noop(){}
-                        function cancel(){
-                            $.fn.colorbox.close();
-                            return false;
-                        }
-                        popup_context = {
-                            setup  : noop,
-                            cancel : cancel,
-                            done: function(res){
-                                ctx.managers.events.renderEvent(res);
-                                return cancel();
-                            }
-                        }
-
-                        var currentCalendar = ctx.managers.calendars.getCalendar();
-                        var calId = currentCalendar && currentCalendar.id || '';
-                        $.fn.colorbox(
-                            {
-                                href: settings.rootUrl+'/popup/events/?calendar='+calId+'&ticket='+id +'&date='+(Math.ceil(new Date().getTime()/30/60/1000)*30*60),
-                                open: true,
-                                title: 'Create Event'
-                            }
-                        )
-
-                    });
-                    //tktElem.draggable();
+                    appendTicket(c, ticket);
                 });
                 notifyUIChanges();
             }
             
+            initContainer();
             ctx.addListener(readActiveTickets);
             ctx.reportReady(this);        
         }
@@ -463,7 +591,7 @@
                         calEvent.editable= true;
                     }
                     calEvent.className=[
-                        'event-theme-'+calendar.theme, 
+                        'c-color'+calendar.theme, 
                         (dto.timetrack ? ' timetrac-enabled' : ''),
                         (dto.ticket && dto.ticket>0 ? ' ticket-reference' : '')
                     ];
@@ -641,7 +769,6 @@
         
 
         //init managers- each will land in ctx.managers
-        new ThemeManager();
         new TransportManager();
         new CalendarsManager();
         new TicketsManager();
@@ -652,7 +779,6 @@
     // publicly accessible defaults
     $.fn.eventCalendar.defaults = {
         my       : '#my-calendars',
-        myShared : '#my-shared-calendars',
         shared   : '#shared-calendars',
         tickets  : '#tickets',
         debug    : false

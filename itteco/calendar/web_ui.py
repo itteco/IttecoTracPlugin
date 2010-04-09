@@ -4,7 +4,7 @@ from genshi.builder import tag
 from genshi.filters.transform import Transformer
 
 import re
-
+import trac
 from trac.core import Component, implements
 from trac.config import Option, ListOption
 
@@ -16,6 +16,8 @@ from trac.util.datefmt import FixedOffset, utc, to_timestamp, to_datetime, get_t
 
 from trac.web.api import IRequestHandler, ITemplateStreamFilter
 from trac.web.chrome import INavigationContributor, add_stylesheet, add_link
+
+import itteco
 
 from itteco.calendar.model import CalendarType, Calendar, Event, TimeTrack
 from itteco.calendar.util import *
@@ -44,12 +46,11 @@ class CalendarModule(Component):
         fmt = req.args.get('format','web')
         if fmt=='ics':
             self._process_ical_request(req)
-            
-        return self._render_ui(req)
+        else:
+            return self._render_ui(req)
     
     def _render_ui(self, req):
-        add_stylesheet(req, 'itteco/css/fullcalendar.css')
-        add_stylesheet(req, 'itteco/css/colorbox/colorbox.css')
+        #add_stylesheet(req, 'itteco/css/colorbox/colorbox.css')
         add_stylesheet(req, 'itteco/css/common.css')
         add_stylesheet(req, 'itteco/css/calendar.css')
 
@@ -63,7 +64,6 @@ class CalendarModule(Component):
                 'stuff/ui/ui.datepicker.js',
                 'stuff/ui/ui.slider.js',
                 'stuff/ui/plugins/fullcalendar.js',
-                'stuff/ui/plugins/jquery.jeditable.js',
                 'stuff/ui/plugins/jquery.colorbox.js',
                 'stuff/ui/plugins/timepicker.js',
                 'stuff/plugins/jquery.rpc.js',
@@ -82,7 +82,6 @@ class CalendarModule(Component):
         req.send_response(200)
         req.send_header('Content-Type', 'text/calendar;charset=utf-8')
         req.end_headers()
-
         def escape_value(text): 
             s = ''.join(map(lambda c: (c in ';,\\') and '\\' + c or c, text))
             return '\\n'.join(re.split(r'[\r\n]+', s))
@@ -145,7 +144,6 @@ class CalendarModule(Component):
             write_prop('END', 'VEVENT')
             
         write_prop('END', 'VCALENDAR')
-    
         
     def filter_stream(self, req, method, filename, stream, data):
         if req.path_info.startswith('/calendar'):
