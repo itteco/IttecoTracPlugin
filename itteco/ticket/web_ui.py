@@ -45,50 +45,29 @@ class IttecoTicketModule(Component):
     
     # IRequestFilter methods
     def pre_process_request(self, req, handler):
-        if req.path_info.startswith('/ticket/') and req.method=='POST' and ('preview' not in req.args):
+        if req.path_info.startswith('/ticket/'):
             req.args['original_handler']=handler
             return self
         return handler
 
     def process_request(self, req):
-        id = int(req.args.get('id'))
-        ticket = Ticket(self.env, id)
-        if ticket.exists:
-            def get_ids(req, attr_name):
-                ids = req.args.get(attr_name, [])
-                return isinstance(ids, basestring) and (ids,) or ids
-                
-            links = TicketLinks(self.env, ticket)
-            links.outgoing_links = [int(id) for id in get_ids(req, 'ticket_links')]
-            links.wiki_links = get_ids(req, 'wiki_links')
-            links.save()
-        return req.args['original_handler'].process_request(RedirectInterceptor(req, self._get_jump_to_url))
+        if req.method=='POST' and ('preview' not in req.args):
+            id = int(req.args.get('id'))
+            ticket = Ticket(self.env, id)
+            if ticket.exists:
+                def get_ids(req, attr_name):
+                    ids = req.args.get(attr_name, [])
+                    return isinstance(ids, basestring) and (ids,) or ids
                     
-    def post_process_request(self, req, template, data, content_type):
-        self.env.log.debug('post_process_request req=%s, pathinfo=%s, args=%s' % (req, req.path_info, req.args))
-        if req.path_info.startswith('/ticket/') \
-            or req.path_info.startswith('/newticket') \
-            or req.path_info.startswith('/milestone') \
-            or req.path_info.startswith('/roadmap'):
-            
-            add_stylesheet(req, 'itteco/css/common.css')
+                links = TicketLinks(self.env, ticket)
+                links.outgoing_links = [int(id) for id in get_ids(req, 'ticket_links')]
+                links.wiki_links = get_ids(req, 'wiki_links')
+                links.save()
+        template, data, content_type = req.args['original_handler'].process_request(RedirectInterceptor(req, self._get_jump_to_url))
+        if template == 'ticket.html':
             add_jscript(
                 req, 
                 [
-                    'stuff/ui/ui.core.js',
-                    'stuff/ui/ui.resizable.js',
-                    'stuff/ui/ui.draggable.js',
-                    'stuff/ui/ui.droppable.js',
-                    'custom_select.js'
-                ],
-                IttecoEvnSetup(self.env).debug
-            )
-        if template=='ticket.html':
-            add_jscript(
-                req, 
-                [
-                    'stuff/ui/ui.draggable.js',
-                    'stuff/ui/ui.droppable.js',
                     'stuff/plugins/jquery.rpc.js',
                     'references.js'
                 ],
@@ -114,6 +93,27 @@ class IttecoTicketModule(Component):
             }
             
             return 'itteco_ticket.html', data, content_type
+        return template, data, content_type
+    
+    def post_process_request(self, req, template, data, content_type):
+        self.env.log.debug('post_process_request req=%s, pathinfo=%s, args=%s' % (req, req.path_info, req.args))
+        if req.path_info.startswith('/ticket/') \
+            or req.path_info.startswith('/newticket') \
+            or req.path_info.startswith('/milestone') \
+            or req.path_info.startswith('/roadmap'):
+            
+            add_stylesheet(req, 'itteco/css/common.css')
+            add_jscript(
+                req, 
+                [
+                    'stuff/ui/ui.core.js',
+                    'stuff/ui/ui.resizable.js',
+                    'stuff/ui/ui.draggable.js',
+                    'stuff/ui/ui.droppable.js',
+                    'custom_select.js'
+                ],
+                IttecoEvnSetup(self.env).debug
+            )
 
         return template, data, content_type
         
