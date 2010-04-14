@@ -120,8 +120,11 @@
                     });
                     transitionMatrix[group.name] = {};
                 });
-                
-                $.each(settings.transitions, function(i, transition){                    
+                var captureAllAction;
+                $.each(settings.transitions, function(i, transition){
+                    if(transition.newstatus=='*'){
+                        captureAllAction = transition.action;
+                    }
                     $.each(transition.oldstatuses, function(j, status){
                         var groupName = statusToGroupName[transition.newstatus];
                         if(typeof groupName!='undefined'){
@@ -129,6 +132,13 @@
                         }
                     });
                 });
+                if(captureAllAction!=undefined){
+                    $.each(settings.groups, function(i, group){
+                        $.each(group.status, function(j, status){
+                            transitionMatrix[group.name][status] = captureAllAction;
+                        });
+                    });
+                }
                 
                 log('transitionMatrix', transitionMatrix);
 
