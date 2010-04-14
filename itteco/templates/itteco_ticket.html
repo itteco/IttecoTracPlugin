@@ -1,0 +1,493 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:py="http://genshi.edgewall.org/"
+      xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="layout.html" />
+  <xi:include href="macros.html" />
+
+  <head>
+    <title>
+      <py:choose>
+        <py:when test="ticket.exists">
+          #${ticket.id} (${ticket.summary})
+        </py:when>
+        <py:otherwise>
+          New Ticket
+        </py:otherwise>
+      </py:choose>
+    </title>
+    <script type="text/javascript" src="${chrome.htdocs_location}js/wikitoolbar.js"></script>
+    <script type="text/javascript" py:choose="">
+      jQuery(document).ready(function($) {
+        $("div.description").find("h1,h2,h3,h4,h5,h6").addAnchor("Link to this section");
+      <py:when test="ticket.exists">
+        $("#changelog h3.change").addAnchor("Link to this change");
+
+        /* only enable control elements for the currently selected action */
+        var actions = $("#action input[name='action']");
+
+        function updateActionFields() {
+          actions.each(function () {
+            $(this).siblings().find("*[@id]").enable($(this).checked());
+            $(this).siblings().filter("*[@id]").enable($(this).checked());
+          });
+        }
+        actions.click(updateActionFields);
+        updateActionFields();
+      </py:when>
+      <py:otherwise>
+        $("#field-summary").focus();
+      </py:otherwise>
+      $("#trac-ticket-traceability").ticketReferences({debug: false, baseurl: '${href()}', rpcurl: '${href.login("xmlrpc")}'});
+      });
+    </script>
+  </head>
+
+  <body>
+    <py:def function="commentref(prefix, cnum)">
+      <a href="#comment:$cnum"><small>$prefix$cnum</small></a>
+    </py:def>
+
+    <py:def function="display_change(change)">
+      <ul py:if="change.fields" class="changes">
+        <li py:for="field_name, field in change.fields.items()">
+          <strong>${field_name}</strong>
+          <py:choose>
+            <py:when test="field_name == 'attachment'">
+              <a href="${href.attachment('ticket', ticket.id, field.new)}"><em>${field.new}</em></a> 
+              <a href="${href('raw-attachment', 'ticket', ticket.id, field.new)}"
+                 title="Download" class="trac-rawlink"><img src="${chrome.htdocs_location}download.png" alt="Download"/></a> 
+              added
+            </py:when>
+            <py:when test="'rendered' in field">${field.rendered}</py:when>
+            <py:when test="field.old and field.new">
+              changed from <em>${field.old}</em> to <em>${field.new}</em>
+            </py:when>
+            <py:when test="not field.old and field.new">
+              set to <em>${field.new}</em>
+            </py:when>
+            <py:otherwise>
+              <em>${field.old}</em> deleted
+            </py:otherwise>
+          </py:choose>
+        </li>
+      </ul>
+      <div py:if="'comment' in change" class="comment searchable" xml:space="preserve">
+        ${wiki_to_html(context, change.comment, escape_newlines=preserve_newlines)}
+      </div>
+    </py:def>
+
+<table width="100%">
+<tr>
+  <td width="90%" valign="top">
+    <div id="content" class="ticket" py:with="preview_mode = 'preview' in req.args">
+      <h1>
+        <py:choose>
+          <py:when test="ticket.exists">
+            <a py:strip="not version and version != 0" href="${href.ticket(ticket.id)}">
+              Ticket #${ticket.id}
+            </a>
+          </py:when>
+          <py:otherwise>
+            Create New Ticket <span py:if="preview_mode and ticket.type" class="status">(${ticket.type})</span>
+          </py:otherwise>
+        </py:choose>
+
+        <py:if test="ticket.exists">
+          <span class="status">(${ticket.status}<py:if
+              test="ticket.type"> ${ticket.type}</py:if><py:if
+              test="ticket.resolution">: ${ticket.resolution}</py:if>)</span>
+          <py:choose test="">
+            <py:when test="version is None" />
+            <py:when test="version == 0">
+              &mdash; at <a href="#comment:description">Initial Version</a>
+            </py:when>
+            <py:otherwise>
+              &mdash; at <a href="#comment:$version">Version $version</a>
+            </py:otherwise>
+          </py:choose>
+        </py:if>
+      </h1>
+
+      <!-- Do not show the ticket (pre)view when the user first comes to the "New Ticket" page.
+           Wait until they hit preview. -->
+      <fieldset id="preview" py:strip="not preview_mode">
+        <py:if test="preview_mode">
+          <legend>Preview (<a href="#${ticket.exists and 'edit' or 'properties'}">skip</a>)</legend>
+
+          <!-- Preview of ticket changes -->
+          <div py:if="change_preview" id="ticketchange" class="ticketdraft">
+            <h3 class="change" id="${'cnum' in change_preview and 'comment:%d' % change_preview.cnum or None}">
+              <span class="threading" py:if="'replyto' in change_preview">
+                in reply to: ${commentref('&darr;&nbsp;', change_preview.replyto)}
+              </span>
+              Changed by ${authorinfo(change_preview.author)}
+            </h3>
+            ${display_change(change_preview)}
+          </div>
+        </py:if>
+
+        <!-- Ticket Box (ticket fields along with description) -->
+        <div id="ticket" py:if="ticket.exists or preview_mode"
+          class="${preview_mode and 'ticketdraft' or None}">
+          <div class="date">
+            <p py:if="ticket.exists">Opened ${dateinfo(ticket.time_created)} ago</p>
+            <p py:if="ticket.time_changed != ticket.time_created">Last modified ${dateinfo(ticket.time_changed)} ago</p>
+            <p py:if="not ticket.exists"><i>(ticket not yet created)</i></p>
+          </div>
+          <!-- use a placeholder if it's a new ticket -->
+          <h2 class="summary searchable">$ticket.summary</h2>
+
+          <table class="properties"
+                 py:with="fields = [f for f in fields if not f.skip and f.name
+                                    not in ('type', 'owner')]">
+            <tr>
+              <th id="h_reporter">Reported by:</th>
+              <td headers="h_reporter" class="searchable">${authorinfo(ticket.reporter)}</td>
+              <th id="h_owner">Owned by:</th>
+              <td headers="h_owner">${ticket.owner and authorinfo(ticket.owner) or ''}
+              </td>
+            </tr>
+            <tr py:for="row in group(fields, 2, lambda f: f.type != 'textarea')"
+              py:with="fullrow = len(row) == 1">
+              <py:for each="idx, field in enumerate(row)">
+                <th py:if="idx == 0 or not fullrow"
+                    id="${field and 'h_'+field.name or None}">
+                  <py:if test="field">${field.label or field.name}:</py:if>
+                </th>
+                <td py:if="idx == 0 or not fullrow"
+                    headers="${field and 'h_'+field.name or None}"
+                    class="${field and field.name in ('cc', 'keywords') and 'searchable' or None}"
+                    colspan="${fullrow and 3 or None}">
+                  <py:if test="field">
+                    <py:choose test="">
+                      <py:when test="'rendered' in field">${field.rendered}</py:when>
+                      <py:otherwise>${ticket[field.name]}</py:otherwise>
+                    </py:choose>
+                  </py:if>
+                </td>
+              </py:for>
+            </tr>
+          </table>
+            <div class="description">
+              <h3 id="comment:description">
+                Description
+                <span py:if="description_change" class="lastmod"
+                      title="$description_change.date">
+                  (last modified by ${authorinfo(description_change.author)})
+                  (<a href="${href.ticket(ticket.id, action='diff', version=description_change.cnum)}">diff</a>)
+                </span>
+              </h3>
+
+              <!--! Quote the description (only for existing tickets) -->
+              <form py:if="ticket.exists and ticket.description and
+                           'TICKET_APPEND' in perm(ticket.resource)"
+                id="addreply"
+                method="get" action="#comment">
+                <div class="inlinebuttons">
+                  <input type="hidden" name="replyto" value="description" />
+                  <input type="submit" name="reply" value="Reply" title="Reply, quoting this description" />
+                </div>
+              </form>
+              <div py:if="ticket.description" class="searchable" xml:space="preserve">
+                ${wiki_to_html(context, ticket.description, escape_newlines=preserve_newlines)}
+              </div>
+              <br py:if="not ticket.description" style="clear: both" />
+            </div>
+        </div>
+      </fieldset>
+      <!--! End of ticket box -->
+
+      <py:if test="ticket.exists">
+        <!--! do not show attachments for old versions of this ticket or for new tickets -->
+        <py:if test="not version and version != 0 and ticket.exists">
+          ${list_of_attachments(attachments)}
+        </py:if>
+
+        <py:if test="ticket.exists and changes">
+          <h2>Change History</h2>
+          <div id="changelog">
+            <form py:for="change in changes" method="get" action="#comment" class="printableform">
+              <div class="change">
+                <h3 class="change" id="${'cnum' in change and 'comment:%d' % change.cnum or None}">
+                  <span class="threading" py:if="replies and 'cnum' in change"
+                        py:with="change_replies = replies.get(str(change.cnum), [])">
+                    <py:if test="change_replies or 'replyto' in change">
+                      <py:if test="'replyto' in change">
+                        in reply to: ${commentref('&uarr;&nbsp;', change.replyto)}
+                        <py:if test="change_replies">; </py:if>
+                      </py:if>
+                      <py:if test="change_replies">follow-up${len(change_replies) > 1 and 's' or ''}:
+                        <py:for each="reply in change_replies">
+                          ${commentref('&darr;&nbsp;', reply)}
+                        </py:for></py:if>
+                    </py:if>
+                    &nbsp;
+                  </span>
+                  Changed ${dateinfo(change.date)} ago by ${authorinfo(change.author)}
+                </h3>
+                <div py:if="'cnum' in change and 'TICKET_APPEND' in perm(ticket.resource)" class="inlinebuttons">
+                  <input type="hidden" name="replyto" value="${change.cnum}" />
+                  <input type="submit" value="Reply" title="Reply to comment ${change.cnum}" />
+                </div>
+                ${display_change(change)}
+              </div>
+            </form>
+          </div>
+        </py:if>
+      </py:if>
+      <!--! End of the section we don't show on initial new tickets -->
+
+      <form py:if="not version and version != 0 and
+                   ('TICKET_APPEND' in perm(ticket.resource) or
+                    'TICKET_CHGPROP' in perm(ticket.resource) or
+                    ('TICKET_CREATE' in perm(ticket.resource) and not ticket.id))"
+            action="${ticket.exists and href.ticket(ticket.id) or href.newticket()}" method="post" id="propertyform">
+        <h3 py:if="ticket.exists"><a id="edit" onfocus="$('#comment').get(0).focus()">
+            Add/Change #${ticket.id} ($ticket.summary)</a></h3>
+        <div py:if="authname == 'anonymous'" class="field">
+          <fieldset>
+            <legend>${ticket.exists and 'Author' or 'Reporter'}</legend>
+            <table>
+              <tr>
+                <th>
+                  <label for="author">Your email or username:</label><br />
+                </th>
+                <td>
+                  <input type="text" id="author" name="author" size="40" value="$author_id" />
+                  <br />
+                </td>
+              </tr>
+            </table>
+            <p py:if="author_id == 'anonymous'" class="hint">
+              E-mail address and user name can be saved in the <a href="${href.prefs()}">Preferences</a>.
+            </p>
+          </fieldset>
+        </div>
+        <div py:if="ticket.exists" class="field">
+          <fieldset class="iefix">
+            <label for="comment">Comment (you may use
+              <a tabindex="42" href="${href.wiki('WikiFormatting')}">WikiFormatting</a>
+              here):
+            </label><br />
+            <p><textarea id="comment" name="comment" class="wikitext" rows="10" cols="78">
+${comment}</textarea></p>
+          </fieldset>
+        </div>
+
+        <fieldset id="properties"
+                  py:if="'TICKET_CHGPROP' in perm(ticket.resource) or
+                         (not ticket.exists and 'TICKET_CREATE' in perm)"
+                  py:with="fields = [f for f in fields if not f.skip]">
+          <legend>${ticket.exists and 'Change ' or ''}Properties</legend>
+          <table>
+            <tr>
+              <th><label for="field-summary">Summary:</label></th>
+              <td class="fullrow" colspan="3">
+                <input type="text" id="field-summary" name="field_summary"
+                       value="$ticket.summary" size="70" />
+              </td>
+            </tr>
+            <py:if test="'TICKET_ADMIN' in perm(ticket.resource)">
+              <tr>
+                <th><label for="field-reporter">Reporter:</label></th>
+                <td class="fullrow" colspan="3">
+                  <input type="text" id="field-reporter" name="field_reporter"
+                         value="${ticket.reporter}" size="70" />
+                </td>
+              </tr>
+            </py:if>
+            <py:if test="'TICKET_EDIT_DESCRIPTION' in perm(ticket.resource) or not ticket.exists">
+              <tr>
+                <th><label for="field-description">Description:</label></th>
+                <td class="fullrow" colspan="3">
+                  <textarea id="field-description" name="field_description"
+                            class="wikitext" rows="10" cols="68"
+                            py:content="ticket.description"></textarea>
+                </td>
+              </tr>
+            </py:if>
+            <tr py:for="row in group(fields, 2, lambda f: f.type != 'textarea' and f.name != 'owner')"
+                py:with="fullrow = len(row) == 1">
+              <py:for each="idx, field in enumerate(row)"
+                      py:with="value = ticket.get_value_or_default(field.name)">
+                <th class="col${idx + 1}" py:if="idx == 0 or not fullrow">
+                  <label for="field-${field.name}" py:if="field"
+                         py:strip="field.type == 'radio'">${field.edit_label or field.label or field.name}:</label>
+                </th>
+                <td class="col${idx + 1}" py:if="idx == 0 or not fullrow"
+                    colspan="${fullrow and 3 or None}">
+                  <py:choose test="field.type" py:if="field">
+                    <select py:when="'select'" id="field-${field.name}" name="field_${field.name}">
+                      <option py:if="field.optional"></option>
+                      <option py:for="option in field.options"
+                              selected="${value == option or None}"
+                              py:content="option"></option>
+                      <optgroup py:for="optgroup in field.optgroups"
+                                py:if="optgroup.options"
+                                label="${optgroup.label}">
+                        <option py:for="option in optgroup.options"
+                                selected="${value == option or None}"
+                                py:content="option"></option>
+                      </optgroup>
+                    </select>
+                    <textarea py:when="'textarea'" id="field-${field.name}" name="field_${field.name}"
+                              cols="${field.width}" rows="${field.height}"
+                              class="${field.format == 'wiki' and 'wikitext' or None}"
+                              py:content="value"></textarea>
+                    <span py:when="'checkbox'">
+                      <input type="checkbox" id="field-${field.name}" name="field_${field.name}"
+                             checked="${value == '1' and 'checked' or None}" value="1" />
+                      <input type="hidden" name="field_checkbox_${field.name}" value="1" />
+                    </span>
+                    <label py:when="'radio'"
+                           py:for="idx, option in enumerate(field.options)">
+                      <input type="radio" name="field_${field.name}" value="${option}"
+                             checked="${value == option or None}" />
+                      ${option}
+                    </label>
+                    <py:otherwise><!--! Text input fields -->
+                      <py:choose>
+                        <span py:when="field.cc_entry"><!--! Special case for Cc: field -->
+                          <em>${field.cc_entry}</em>
+                          <input type="checkbox" id="field-cc" name="cc_update"
+                            title="This checkbox allows you to add or remove yourself from the CC list."
+                            checked="${field.cc_update}" />
+                        </span>
+                        <!--! Cc: when TICKET_EDIT_CC is allowed -->
+                        <span py:when="field.name == 'cc'">
+                          <input  type="text" id="field-${field.name}"
+                            title="Space or comma delimited email addresses and usernames are accepted."
+                            name="field_${field.name}" value="${value}" />
+                        </span>
+                        <!--! All the other text input fields -->
+                        <input py:otherwise="" type="text" id="field-${field.name}"
+                          name="field_${field.name}" value="${value}" />
+                      </py:choose>
+                    </py:otherwise>
+                  </py:choose>
+                </td>
+              </py:for>
+            </tr>
+          </table>
+
+        </fieldset>
+
+        <py:if test="ticket.id and ticket_links"> <!--! do not display the taceability for New tickets and if ti is not setup by plugin-->
+          <fieldset id="trac-ticket-traceability">
+            <legend>Traceability</legend>
+            <table width="100%">
+                <tr>
+                    <td width="50%">
+                        <ul class="t-trace-items" id="trac-outgoing-links">
+                            <li py:for="ref in ticket_links.outgoing.links">
+                                <input type="hidden" name="ticket_links" value="${ref.id}"/>
+                                <a href="${href.ticket(ref.id)}" class="s-context s-icon-context s-icon s-icon-context-ticket">#${ref.id}</a> ${ref.summary}<a href="#" class="t-trace-delete" title="Delete reference">delete</a>
+                            </li>
+                            <li py:for="ref in ticket_links.wiki">
+                                <input type="hidden" name="wiki_links" value="ref"/>
+                                <a href="${href.wiki(ref)}" class="s-context s-icon-context s-icon s-icon-context-ticket">#${ref}</a> ${ref}<a href="#" class="t-trace-delete" title="Delete reference">delete</a>
+                            </li>
+                        </ul>
+                    </td>
+                    <td width="50%">
+                        <ul class="t-trace-items">
+                            <li py:for="ref in ticket_links.incoming.links">
+                                <input type="hidden" name="incoming_links" value="${ref.id}"/>
+                                <a href="${href.ticket(ref.id)}" class="s-context s-icon-context s-icon s-icon-context-ticket">#${ref.id}</a> ${ref.summary}<a href="#" class="t-trace-delete" title="Delete reference">delete</a>
+                            </li>
+                        </ul>
+                    </td>
+                </tr>
+            </table>
+          </fieldset>
+        </py:if>
+
+        <!--! Workflow support -->
+        <py:if test="ticket.id"> <!--! do not display the actions for New tickets -->
+          <fieldset id="action">
+            <legend>Action</legend>
+            <div py:for="key, label, controls, hints in action_controls">
+              <input type="radio" id="action_$key" name="action" value="$key" checked="${action == key or None}" />
+                <label for="action_$key">$label</label>
+                $controls
+                <span class="hint" py:for="hint in hints">$hint</span>
+            </div>
+          </fieldset>
+        </py:if>
+
+        <p py:if="not ticket.exists and 'ATTACHMENT_CREATE' in perm(ticket.resource.child('attachment'))">
+          <label>
+            <input type="checkbox" name="attachment" checked="${'attachment' in req.args or None}" />
+            I have files to attach to this ticket
+          </label>
+        </p>
+        <div class="buttons">
+          <input py:if="not ticket.exists" type="hidden" name="field_status" value="new" />
+          <py:if test="ticket.exists">
+            <input type="hidden" name="ts" value="${timestamp}" />
+            <input type="hidden" name="replyto" value="${replyto}" />
+            <input type="hidden" name="cnum" value="${cnum}" />
+          </py:if>
+          <input type="submit" name="preview" value="Preview" accesskey="r" />&nbsp;
+          <input type="submit" name="submit" value="${ticket.exists and 'Submit changes' or 'Create ticket'}" />
+        </div>
+
+      </form>
+
+      <div id="help">
+        <strong>Note:</strong> See
+        <a href="${href.wiki('TracTickets')}">TracTickets</a> for help on using
+        tickets.
+      </div>
+    </div>
+  </td>
+  <td width="10%" valign="top">
+    <div class="s-box s-widget-collapsible" id="trac-ticket-edit-search-references">
+        <div class="s-box-header s-widget-handler">
+            <h4>Search for References</h4>
+        </div>
+        <div class="s-box-body s-widget-body">
+            <div class="s-form t-ticket-references">
+                <form method="get" action="" id="search-references-form">
+                    <input type="text" name="q" id="q"/>
+                    <input type="submit" value="Search"/>
+                    <p class="note">Drag-n-drop search results onto ticket to set a trace. Changes discarded unless you save it.</p>
+                    <p>Limit search to:</p>
+                    <py:if test="filters">
+                    <div class="s-columns s-columns-equal" py:with="c=len(filters)/2; left_filters = filters[:c]; right_filters= filters[c:]">
+                        <div class="s-column-left">
+                            <ul>
+                                <li py:for="filter in left_filters">
+                                    <input type="checkbox" id="${filter.name}" name="${filter.name}" checked="${filter.active and 'checked' or None}"/> <label for="${filter.name}">${filter.label}</label>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="s-column-right">
+                            <ul>
+                                <li py:for="filter in right_filters">
+                                    <input type="checkbox" id="${filter.name}" name="${filter.name}" checked="${filter.active and 'checked' or None}"/> <label for="${filter.name}">${filter.label}</label>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    </py:if>
+                </form> 
+            </div>
+        </div>
+    </div>
+    <!-- /widget: references -->
+    <!-- widget: results - search for references -->
+    <div class="s-cleanbox s-widget-collapsible" id="trac-ticket-edit-search-references-results">
+        <div class="s-cleanbox-header s-widget-handler references-search-summary">
+            <h4></h4>
+        </div>
+        <div class="s-cleanbox-body s-widget-body t-ticket-references-results references-search-results"/>
+    </div>
+  </td>
+</tr>
+</table>
+  </body>
+</html>
