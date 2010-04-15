@@ -115,6 +115,7 @@ class StructuredMilestone(object):
         self.ticket.values = {}
         self.ticket['summary'] = milestone.name        
         self.ticket['type'] = milestone_ticket_type
+        self.ticket._old={}
         
         if self.exists:
             self._fetch(milestone.name, db)

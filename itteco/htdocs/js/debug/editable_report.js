@@ -259,7 +259,7 @@
                                         '<li><a title="Quick view/edit" class="s-icon-button s-icon s-icon-edit-quick" href="#">View</a></li>'+
                                         '<li><a title="Full view/edit" class="s-icon-button s-icon s-icon-edit" href="#">Edit</a></li>'+
                                         '<li><a title="Comments" class="s-icon-button s-icon s-icon-comments" href="#">Comments</a></li>'+
-                                        (settings.timerurl!='' ? '<li><a href="'+settings.timerurl+'?title='+encodeURIComponent('#'+ticket.id+' '+ ticket.summary)+'">Time Track</a></li>' : '')+
+                                        (options.timerurl!='' ? '<li><a href="'+options.timerurl+'?title='+encodeURIComponent('#'+ticket.id+' '+ ticket.summary)+'">Time Track</a></li>' : '')+
                                     '</ul>');
                                 $col.find('.s-icon-edit-quick').click(function(){
                                     popupManager.showQuickEditor(ticketNum);

@@ -47,6 +47,7 @@
             rpc.structured_milestone.update(
                 handleMilestoneResp,
                 id,
+                '',
                 attrs
             );
         }
@@ -132,17 +133,6 @@
 					<div class="s-form-row">
 						<div class="s-form-cell s-form-cell-primary s-form-label"><label for="field-milestone">Belongs to</label></div>
 						<div class="s-form-cell "><xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></div>
-					</div>
-					<div class="s-form-row" py:if="obj and obj.id!='new' and cfg.workflow">
-						<div class="s-form-cell s-form-cell-primary s-form-label"><label for="field-action">Action</label></div>
-						<div class="s-form-cell ">
-							<div py:for="key, label, controls, hints in action_controls">
-							  <input type="radio" id="action_$key" name="field_action" value="$key" checked="${action == key or None}" />
-								<label for="action_$key">$label</label>
-								$controls
-								<span class="hint" py:for="hint in hints">$hint</span>
-							</div>
-						</div>
 					</div>
 					<input type="hidden" name="milestone_name" value="${milestone.name}"/>
 				</div>
