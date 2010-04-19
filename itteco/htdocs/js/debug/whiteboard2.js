@@ -208,7 +208,8 @@
                     
                     return settings.scopeitem.types.indexOf(type)!=-1;
                 }
-                function decorateScopeElement(story){
+                function decorateScopeElement(story, uid){
+                    story.$local$uid = uid;
                     story.groupItems = {};
                     story.progress = new ProgressBar(fullProgress);
                     story.remove = function(ticket){
@@ -466,7 +467,7 @@
                     }
                     
                     function renderScopeElement(story){
-                        var widgetId = ('story-widget-'+story.id).replace(/_/g,'__').replace(/\s/g,'_');
+                        var widgetId = 'story-widget-'+story.$local$uid;
                         var widget= $('#'+widgetId, root);
                         if(widget.length>0){
                             widget.empty();
@@ -703,7 +704,7 @@
                             log('Whiteboard query results:', resp);
 
                             $.each(resp.result, function(i, story){
-                                decorateScopeElement(story);
+                                decorateScopeElement(story, i);
                                 if (typeof story.references!='undefined'){
                                     $.each(story.references, function(j, ticket){
                                         story.add(ticket);
