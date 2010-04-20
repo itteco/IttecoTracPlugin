@@ -87,9 +87,8 @@ class IttecoReportModule(Component):
         return stream
 
     def _are_all_mandatory_fields_found(self, cols):
-        all_cols = [col['col'] for col in cols]
-        found_fields = [col for col in all_cols if col in self.mandatory_cols]
-        id_cols = [col for col in all_cols if col in self.id_cols]
+        found_fields = [col for col in cols if col in self.mandatory_cols]
+        id_cols = [col for col in cols if col in self.id_cols]
         return len(found_fields)==len(self.mandatory_cols) and len(id_cols)>0
 
     #IRequestFilter methods
@@ -118,9 +117,13 @@ class IttecoReportModule(Component):
             if id and action=='view':
                 req.session['last_used_report'] = id
                 if header_groups and len(header_groups)>0:
-                    all_cols = [col for header_group in header_groups for col in header_group]
-                    if self._are_all_mandatory_fields_found(all_cols):
-                        id_col = [col['col'] for col in all_cols][0]
+                    all_col_names = [col['col'] for header_group in header_groups for col in header_group]
+                    data['column_classes'] = dict(
+                        [ (key, value.get('classname')) \
+                            for key, value in self.fields_config().items() \
+                                if key in all_col_names])
+                    if self._are_all_mandatory_fields_found(all_col_names):
+                        id_col = all_col_names[0]
 
                         args = ReportModule(self.env).get_var_args(req)
                         db = self.env.get_db_cnx()
@@ -197,6 +200,7 @@ class IttecoReportModule(Component):
             'type' : 'text'
         }
         config ={}
+        mappings_config = self.env.config['itteco-report']
         for field in fields:
             cfg = config.setdefault(field['name'], default.copy())
             type = field['type']
@@ -206,12 +210,17 @@ class IttecoReportModule(Component):
             cfg['field_name'] = field['name']
             if type=='select':
                 cfg['options'] = field['options']
-        mappings_config = self.env.config['itteco-report']
+            classname = mappings_config.get(field['name']+'.classname')
+            if classname:
+                cfg['classname'] = classname
+        
         for option in mappings_config:
-            if option and config.get(option):
+            if option and option.endswith('.synonyms') \
+                and config.get(option[:-9]):
+                
                 for synonym in mappings_config.getlist(option,''):
                     if synonym:
-                        config[synonym] = config[option].copy()
+                        config[synonym] = config[option[:-9]].copy()
         self.env.log.debug('itteco-report-config=%s' % config)
         return config
     
