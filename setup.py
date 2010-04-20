@@ -23,6 +23,7 @@ setup(
             'htdocs/charts/amstock/amstock.swf',
             'htdocs/css/*.css',
             'htdocs/css/colorbox/*.css',
+            'htdocs/css/colorbox/images/*.gif',
             'htdocs/css/colorbox/images/*.png',
             'htdocs/css/colorbox/images/internet_explorer/*.png',
             'htdocs/images/*',
