@@ -269,9 +269,9 @@
                     function makeCollapsable(widget, widgetHeader, widgetBody){
                         widgetHeader.unbind().click(function(e) {                        
                             if (widget.hasClass('w-widget-collapsed')) {
-                                widgetBody.slideDown();
+                                widgetBody.show();
                             }else {
-                                widgetBody.slideUp();
+                                widgetBody.hide();
                             }
                             widget.toggleClass('w-widget-collapsed');
                         });

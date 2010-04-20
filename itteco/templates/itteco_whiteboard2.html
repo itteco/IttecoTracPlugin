@@ -72,8 +72,8 @@
                     resetWhiteboard();
                 }
             }
-            $('.context-toggle > select').each(function(){
-                $.fn.handleMSDropDownChange(this, onSelectChanged);
+            $('.context-toggle > select').change(function(){
+                onSelectChanged(this);
             });
             $.fn.handleMSDropDownChange(
                 $('#smile-filterbar-milestone').val(whiteboard_context.milestone).get(0),
@@ -91,7 +91,7 @@
                 resetWhiteboard();
                 return false;
             });
-            $('.s-filterbar select').msDropDown();
+            $('#smile-filterbar-milestone').msDropDown();
         });
     /*]]>*/
     </script>
