@@ -440,8 +440,8 @@ class WhiteboardModule(Component):
         milestoneitem = {
             'realm' : 'milestone',
             'types' : [milestone_ticket_type],
-            'weight': self.scope_element_weight_field,
-            'weightlabel' : 'BV'
+            'weight': self.work_element_weight_field,
+            'weightlabel' : 'CP'
         }
         scopeitem = {
             'realm' : 'ticket',
