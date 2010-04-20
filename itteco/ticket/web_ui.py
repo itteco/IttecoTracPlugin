@@ -45,13 +45,13 @@ class IttecoTicketModule(Component):
     
     # IRequestFilter methods
     def pre_process_request(self, req, handler):
-        if req.path_info.startswith('/ticket/'):
+        if req.path_info.startswith('/ticket/') or req.path_info.startswith('/newticket'):
             req.args['original_handler']=handler
             return self
         return handler
 
     def process_request(self, req):
-        if req.method=='POST' and ('preview' not in req.args):
+        if req.method=='POST' and ('preview' not in req.args) and req.args.get('id'):
             id = int(req.args.get('id'))
             ticket = Ticket(self.env, id)
             if ticket.exists:
