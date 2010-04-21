@@ -555,11 +555,13 @@ class IttecoMilestoneModule(Component):
         if ticket['type']==milestone_ticket_type \
             and old_summary \
             and ticket['summary'] != old_summary:
-            milestone = Milestone(self.env, old_summary)
-            if milestone.exists:
-                milestone.name = ticket['summary']
-                milestone.update()
-        
+                try:
+                    milestone = Milestone(self.env, old_summary)
+                    if milestone.exists:
+                        milestone.name = ticket['summary']
+                        milestone.update()
+                except ResourceNotFound:
+                    pass
 
     def ticket_deleted(self, ticket):
         pass
