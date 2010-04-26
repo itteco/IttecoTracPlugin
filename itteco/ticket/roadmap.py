@@ -571,8 +571,8 @@ class IttecoMilestoneModule(Component):
         return 'structured_milestone'
 
     def xmlrpc_methods(self):
-        yield (None, ((dict,), (dict)), self.create)
-        yield (None, ((dict,), (str, str, dict)), self.update)
+        yield (None, ((dict, dict),), self.create)
+        yield (None, ((dict, str, str, dict),), self.update)
 
     def create(self, req, attributes):
         """ Create a structure milestone object."""
