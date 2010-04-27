@@ -153,7 +153,8 @@ class IttecoMilestoneModule(Component):
         """Name of the component implementing `ITicketGroupStatsProvider`, 
         which is used to collect statistics on groups of tickets for display
         in the milestone views.""")
-    
+
+    date_fields = ('started', 'duedate', 'completed')
 
     # INavigationContributor methods
 
@@ -334,6 +335,7 @@ class IttecoMilestoneModule(Component):
 
         due = req.args.get('duedate', '')
         milestone.due = due and parse_date(due, tzinfo=req.tz) or None
+        milestone.ticket['duedate']=milestone.due and str(to_timestamp(milestone.due)) or None
 
         completed = req.args.get('completeddate', '')
         retarget_to = req.args.get('target')
@@ -422,6 +424,7 @@ class IttecoMilestoneModule(Component):
         data = {
             'milestone': milestone,
             'ticket': milestone.ticket,
+            'datefields' : self.date_fields,
             'date_hint': get_date_format_hint(),
             'datetime_hint': get_datetime_format_hint(),
             'milestone_groups': [],
@@ -600,7 +603,6 @@ class IttecoMilestoneModule(Component):
                 milestone.ticket[k] = v
         milestone.save_changes(get_reporter_id(req, 'author'), comment)
         return {'name': milestone.name, 'description': milestone.description}
-        
     
 class IttecoRoadmapModule(RoadmapModule):
     _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])   
