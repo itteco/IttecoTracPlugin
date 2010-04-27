@@ -175,6 +175,8 @@ class MilestoneSystem(Component):
         fields = [
             {'name': 'summary', 'type': 'text', 'label': 'Summary'},
             {'name': 'description', 'type': 'textarea', 'label': 'Description'},
+            {'name' : 'duedate', 'type' : 'text', 'label' : 'Due date', 'skip' : True, 'custom' : True},
+            {'name' : 'completedate', 'type' : 'text', 'label' : 'Complete date', 'skip' : True, 'custom' : True},
             {'name' : 'started', 'type' : 'text', 'label' : 'Started At', 'skip' : True, 'custom' : True},
             {'name' : 'type', 'type' : 'text', 'label' : 'TypesAt', 'skip' : True},
             {'name' : 'milestone',  'type' : 'text', 'label' : 'Parent', 'options' : []},
@@ -194,7 +196,7 @@ class MilestoneSystem(Component):
                 self.log.warning('Duplicate field name "%s" (ignoring)',
                                  field['name'])
                 continue
-            if field['name'] in self.reserved_field_names:
+             if field['name'] in self.reserved_field_names:
                 self.log.warning('Field name "%s" is a reserved name '
                                  '(ignoring)', field['name'])
                 continue

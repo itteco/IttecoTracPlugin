@@ -6,7 +6,12 @@
       xmlns:xi="http://www.w3.org/2001/XInclude">
   <xi:include href="layout.html" />
   <xi:include href="macros.html" />
-
+<?python
+def render_value(field_name, value):
+    if datefields and field_name in datefields:
+        return format_date(int(value))
+    return value
+?>
   <head>
     <title>
       <py:choose>
@@ -55,20 +60,17 @@
           <strong>${field_name}</strong>
           <py:choose>
             <py:when test="field_name == 'attachment'">
-              <a href="${href.attachment('ticket', ticket.id, field.new)}"><em>${field.new}</em></a> 
-              <a href="${href('raw-attachment', 'ticket', ticket.id, field.new)}"
-                 title="Download" class="trac-rawlink"><img src="${chrome.htdocs_location}download.png" alt="Download"/></a> 
-              added
+              <a href="${href.attachment('ticket', ticket.id, field.new)}"><em>${field.new}</em></a> added
             </py:when>
             <py:when test="'rendered' in field">${field.rendered}</py:when>
             <py:when test="field.old and field.new">
-              changed from <em>${field.old}</em> to <em>${field.new}</em>
+              changed from <em>${render_value(field_name, field.old)}</em> to <em>${render_value(field_name, field.new)}</em>
             </py:when>
             <py:when test="not field.old and field.new">
-              set to <em>${field.new}</em>
+              set to <em>${render_value(field_name, field.new)}</em>
             </py:when>
             <py:otherwise>
-              <em>${field.old}</em> deleted
+              <em>${render_value(field_name, field.old)}</em> deleted
             </py:otherwise>
           </py:choose>
         </li>
@@ -284,6 +286,14 @@ ${comment}</textarea></p>
               <td class="fullrow" colspan="3">
                 <input type="text" id="field-summary" name="field_summary"
                        value="$ticket.summary" size="70" />
+              </td>
+            </tr>
+            <tr>
+              <th><label for="duedate">Due:</label></th>
+              <td class="fullrow" colspan="3">
+                    <input type="text" id="duedate" name="duedate" size="${len(date_hint)}"
+                           value="${milestone.due and format_date(milestone.due)}" title="Format: ${date_hint}" />
+                    <em>Format: ${date_hint}</em>
               </td>
             </tr>
             <py:if test="'MILESTONE_ADMIN' in perm(ticket.resource)">
