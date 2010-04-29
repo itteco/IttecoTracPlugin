@@ -196,7 +196,7 @@ class MilestoneSystem(Component):
                 self.log.warning('Duplicate field name "%s" (ignoring)',
                                  field['name'])
                 continue
-             if field['name'] in self.reserved_field_names:
+            if field['name'] in self.reserved_field_names:
                 self.log.warning('Field name "%s" is a reserved name '
                                  '(ignoring)', field['name'])
                 continue

@@ -538,8 +538,9 @@ class WhiteboardModule(Component):
         if not names:
             return default
         names = isinstance(names, basestring) and [name.strip() for name in names.split(',')] or names
-        return [field for field in TicketSystem(self.env).get_ticket_fields() \
+        fields = [field for field in TicketSystem(self.env).get_ticket_fields() \
                                 if field['name'] in names]
+        return sorted(fields, key = lambda field: names.index(field['name']))
     
     def _get_ticket_groups(self):
         groups_config = self.env.config['itteco-whiteboard-groups']

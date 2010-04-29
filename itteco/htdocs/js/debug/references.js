@@ -166,21 +166,22 @@
                     results.append(createWidget(candidate));
                 });
             }
-            
             function createWidget(candidate){
                 var widget = $(
-                    '<div class="w-ticket w-ticket-'+candidate.subtype+' reference-'+candidate.type+'">'+
+                    '<div class="w-ticket w-ticket-'+candidate.subtype+' reference-'+candidate.type+' s-widget-nofx">'+
                         '<div class="w-ticket-header">'+
                             '<h6>'+
-                                '<span class="w-ticket-number"><a href="'+settings.baseurl+'/'+candidate.type+'/'+candidate.id+'">#'+candidate.id+'</a></span>'+candidate.title+
+                                '<span class="w-ticket-number"><a href="'+settings.baseurl+'/'+candidate.type+'/'+candidate.id+'">#'+candidate.id+'</a></span>&nbsp;'+candidate.title+
                             '</h6>'+
                         '</div>'+
                         '<div class="w-ticket-body">'+
                             '<div class="w-ticket-description">'+candidate.excerpt+'</div>'+
-                            '<div class="s-columns s-columns-equal w-ticket-toolbar">'+
+                            '<div class="s-columns w-ticket-toolbar">'+
                                 '<div class="s-column-left">'+
                                     (candidate.author 
-                                        ? '<img class="s-avatar" width="20" height="20" alt="'+candidate.author+'" title="'+candidate.author+'" src="temp/avatar.png" />'
+                                        ? '<div class="s-avatar-wrapper s-avatar-wrapper-20">'+
+                                                '<img class="s-avatar" width="20" height="20" alt="'+candidate.author+'" title="'+candidate.author+'" src="'+settings.avatarResolver(settings, candidate.author)+'" />'+
+                                            '</div>'
                                         : ''
                                     )+
                                     (candidate.date
@@ -213,6 +214,7 @@
                         }
                     );
                 }
+                settings.rendererCallback(widget);
                 return widget;
             }
             init();
@@ -230,6 +232,11 @@
         searchSummarySelector: '#trac-ticket-edit-search-references-results .references-search-summary > h4',
         searchResultsSelector: '#trac-ticket-edit-search-references-results .references-search-results',
         appendTarget: '#trac-outgoing-links',
+        avatarResolver: function(settings, owner){
+            return settings.baseurl+'/chrome/itteco/images/avatar.png';
+        },
+        rendererCallback: function(widget){
+        },
         debug    : false
     };
 

@@ -141,11 +141,14 @@
 				<div class="s-form p-form-ticket-edit">
 					<div class="s-form-row" py:for="field in fields">
 						<div class="s-form-cell s-form-cell-primary s-form-label"><label for="field-${field.name}">${field['label']}</label></div>
-						<div class="s-form-cell ">${render_field_editor(obj, field)}</div>
-					</div>
-					<div class="s-form-row">
-						<div class="s-form-cell s-form-cell-primary s-form-label"><label for="field-milestone">Milestone</label></div>
-						<div class="s-form-cell "><xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" /></div>
+						<div class="s-form-cell " py:choose="field.name">
+                            <py:when test="milestone">
+                                <xi:include py:with="field_name='field_milestone'; milestone_name= obj.milestone;"  href="itteco_milestones_dd.html" />
+                            </py:when>
+                            <py:otherwise>
+                                ${render_field_editor(obj, field)}
+                            </py:otherwise>
+                        </div>
 					</div>
 					<div class="s-form-row" py:if="obj and obj.id!='new' and cfg.workflow">
 						<div class="s-form-cell s-form-cell-primary s-form-label"><label for="field-action">Action</label></div>

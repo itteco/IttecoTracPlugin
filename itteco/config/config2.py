@@ -66,6 +66,7 @@ def do_upgrade(env, db, installed_version):
     upgrade_to_0_2_3(env, db, installed_version)
     upgrade_to_0_2_4(env, db, installed_version)
     upgrade_to_0_2_5(env, db, installed_version)
+    upgrade_to_0_2_6(env, db, installed_version)
     return True
 
 def upgrade_to_0_2_0(env, db, installed_version):
@@ -225,3 +226,19 @@ def upgrade_to_0_2_5(env, db, installed_version):
             policies = policy
     trac_cfg.set('permission_policies', policies)
     env.config.save()
+    
+def upgrade_to_0_2_6(env, db, installed_version):
+    if installed_version>=[0,2,6]:
+        return True
+        
+    cfg = env.config['itteco-whiteboard-tickets-config']
+    defaults = cfg.get('default_fields')
+    if defaults:
+        defaults = [name.strip() for name in defaults.split(',')]
+        try:
+            idx = defaults.index('description')
+            defaults.insert(idx+1, 'milestone')
+        except ValueError:
+            defaults.append('milestone')
+        cfg.set('default_fields', ','.join(defaults))
+        env.config.save()
