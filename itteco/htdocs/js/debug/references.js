@@ -83,12 +83,18 @@
                 var form = $('form', $(settings.searchSelector));
                 log('searcher form', form);
                 form.submit(function(){
+                    $(settings.searchProgressSelector).show();
+                    $(settings.searchResultsSelector).hide();
+                    
                     var filters = [];
                     $('input:checkbox:checked', form).each(function(){
                         filters.push(this.name);
                     });
                     ctx.managers.transport.proxy.ticketconfig.references_search(
                         function(resp){
+                            $(settings.searchProgressSelector).hide();
+                            $(settings.searchResultsSelector).show();
+
                             log('references search results', resp);
                             if(resp.result){
                                 candidatesQuantity = -1;
@@ -109,7 +115,10 @@
             }
 
             function initActiveElements(){
-                settings.target.droppable(
+                var dropArea = typeof(settings.dropTo)=='undefined' 
+                    ? settings.target 
+                    : $(settings.dropTo, settings.target);
+                dropArea.droppable(
                     {
                         activeClass: 'droppable-active', 
                         hoverClass: 'droppable-hover',
@@ -228,6 +237,7 @@
     $.fn.ticketReferences.defaults = {
         baseurl : '',
         rpcurl: '/login/xmlrpc',
+        searchProgressSelector: '#search-reference-progress',
         searchSelector: '#trac-ticket-edit-search-references',
         searchSummarySelector: '#trac-ticket-edit-search-references-results .references-search-summary > h4',
         searchResultsSelector: '#trac-ticket-edit-search-references-results .references-search-results',
