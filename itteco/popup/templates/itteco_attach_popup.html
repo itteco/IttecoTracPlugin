@@ -74,42 +74,59 @@
         init();
     };
 /*]]>*/</script>
-    <div class="s-block s-widget-nofx">
-        <div class="s-block-header s-widget-handler">
-            <h4>Upload File</h4>
+
+	<!-- container -->
+	<div class="p-container" style="min-width:600px">
+		<!-- header -->
+        <div class="p-header">
+        	<div class="p-header-bl">
+            	<div class="p-header-br">
+	        		<h1>Attach a file</h1>
+                </div>
+        	</div>
         </div>
-        <div class="s-block-body s-widget-body">
-            <div id="popup-attachment-editor" class="s-form">
-                <form action="" method="POST" enctype="multipart/form-data">
+        <!-- /header -->
+		<!-- content -->
+        <div id="popup-attachment-editor" class="p-content">
+            <!-- form -->
+            <form action="" method="POST" enctype="multipart/form-data">
+
+                <div class="s-form p-form-ticket-edit">
                     <div class="s-form-row">
                         <div class="s-form-cell s-form-cell-primary s-form-label"><label for="file">File</label></div>
-                        <div class="s-form-cell s-form-item"><input id="attachment" type="file" size="45" name="attachment" class="input"/></div>
+                        <div class="s-form-cell s-form-item-xl"><input id="attachment" type="file" name="attachment" class="s-input-file"/></div>
                     </div>
+                    
                     <div class="s-form-row">
                         <div class="s-form-cell s-form-cell-primary s-form-label"><label for="description">Description</label></div>
-                        <div class="s-form-cell s-form-item"><input type="text" name="description" size="60" /></div>
+                        <div class="s-form-cell s-form-item-xl"><input type="text" name="description" size="60" /></div>
                     </div>
+
                     <div class="s-form-row">
-                        <div class="s-form-cell"></div>
-                        <div class="s-form-cell s-form-label"><input id="replace" type="checkbox" name="replace" /> &nbsp; <label for="replace">Replace existing attachment of the same name</label></div>
+                        <div class="s-form-cell s-form-cell-primary s-form-label"><label>&nbsp;</label></div>
+                        <div class="s-form-cell s-form-check-value"><label><input id="replace" type="checkbox" name="replace" /> Replace existing attachment of the same name</label></div>
+
                     </div>
-                    <div class="s-buttons">
-                        <div class="s-button-item">
-                            <button class="s-button upload-button">Upload</button>
-                        </div>
+                </div> 
+                <!-- /form -->
+                <!-- buttons -->
+                <div class="s-buttons p-footer">
+                    <div class="s-buttons-item">
+                        <input type="submit" class="s-button s-button-save upload-button" value="Upload" name="submit" />
                     </div>
-                </form>
-                <script type="text/javascript">/*<![CDATA[*/
-                if(window.popup_context){
-                    attachmentFormManager("#popup-attachment-editor", "${href.login('xmlrpc')}");
-                }else{
-                    jQuery(document).ready(function(){
-                        attachmentFormManager("#popup-attachment-editor", "${href.login('xmlrpc')}");
-                    });
-                }
-                /*]]>*/</script>
-            </div>
+                </div>
+                <!-- /buttons -->
+            </form>
         </div>
+        <script type="text/javascript">/*<![CDATA[*/
+        if(window.popup_context){
+            attachmentFormManager("#popup-attachment-editor", "${href.login('xmlrpc')}");
+        }else{
+            jQuery(document).ready(function(){
+                attachmentFormManager("#popup-attachment-editor", "${href.login('xmlrpc')}");
+            });
+        }
+        /*]]>*/</script>
     </div>
 </body>
 </html>
