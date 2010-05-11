@@ -181,6 +181,7 @@ class MilestoneSystem(Component):
             {'name' : 'type', 'type' : 'text', 'label' : 'TypesAt', 'skip' : True},
             {'name' : 'milestone',  'type' : 'text', 'label' : 'Parent', 'options' : []},
             {'name' : 'owner',  'type' : 'text', 'label' : 'Owner'},
+            {'name' : 'reporter',  'type' : 'text', 'label' : 'Reporter', 'skip': True},
             {
                 'name'   : 'status',  
                 'type'   : 'select', 

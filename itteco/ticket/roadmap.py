@@ -311,6 +311,10 @@ class IttecoMilestoneModule(Component):
         
         ticket_module = TicketModule(self.env)
         ticket_module._populate(req, milestone.ticket, False)
+        if not milestone.exists:
+            reporter_id = get_reporter_id(req, 'author')
+            milestone.ticket.values['reporter'] = reporter_id
+
         action = req.args.get('action', 'leave')
 
         field_changes, problems = ticket_module.get_ticket_changes(req, milestone.ticket,
