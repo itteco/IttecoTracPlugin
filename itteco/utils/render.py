@@ -38,3 +38,12 @@ def js_encode(obj, extra=None):
     elif isinstance(obj, list) or isinstance(obj, tuple):
         return "[%s]" % ",".join(["%s" % js_encode(i) for i in obj])
     return "'%s'" % obj
+
+def referer_module(req):
+    referer = req.args.get('referer') or req.get_header('Referer')
+    if not referer:
+        return None
+    referer = referer[len(req.base_url):].split('/')
+    if len(referer)>1:
+        return referer[1]
+    return None

@@ -21,8 +21,7 @@ from itteco.init import IttecoEvnSetup
 from itteco.ticket.admin import IttecoMilestoneAdminPanel
 from itteco.ticket.model import TicketLinks, StructuredMilestone
 from itteco.ticket.utils import get_fields_by_names, get_tickets_by_ids
-from itteco.utils.json import write
-from itteco.utils.render import hidden_items, add_jscript
+from itteco.utils.render import hidden_items, add_jscript, referer_module
 
 class RedirectInterceptor(object):
     def __init__(self, req, mapper):
@@ -92,6 +91,8 @@ class IttecoTicketModule(Component):
                 'wiki' : links.wiki_links
             }
             
+            data['jump_to'] = req.args.get('jump_to') or referer_module(req)
+            
             return 'itteco_ticket.html', data, content_type
         return template, data, content_type
     
@@ -123,7 +124,7 @@ class IttecoTicketModule(Component):
         if 'original_handler' not in req.args or jump_target is None or jump_target=='stay':
             return original_url
         
-        if jump_target=='reports' and req.session.get('query_href'):
+        if jump_target=='report' and req.session.get('query_href'):
             return req.session.get('query_href')
             
         if jump_target=='whiteboard':

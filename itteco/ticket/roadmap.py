@@ -46,6 +46,7 @@ from itteco.ticket.model import StructuredMilestone, milestone_ticket_type
 from itteco.ticket.report import IttecoReportModule
 from itteco.ticket.utils import get_fields_by_names, get_tickets_for_milestones
 from itteco.utils import json
+from itteco.utils.render import referer_module
 
 def get_tickets_for_structured_milestone(env, db, milestone, field='component', types=None):
     field = ['milestone'] + ( field and (isinstance(field, basestring) and [field,] or field) or [])
@@ -432,6 +433,7 @@ class IttecoMilestoneModule(Component):
             'date_hint': get_date_format_hint(),
             'datetime_hint': get_datetime_format_hint(),
             'milestone_groups': [],
+            'jump_to' : req.args.get('jump_to') or referer_module(req)
         }
 
         if milestone.exists:
