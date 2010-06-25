@@ -103,7 +103,7 @@ class IttecoTicketModule(Component):
             or req.path_info.startswith('/milestone') \
             or req.path_info.startswith('/roadmap'):
             
-            add_stylesheet(req, 'itteco/css/common.css')
+            #add_stylesheet(req, 'itteco/css/common.css')
             add_jscript(
                 req, 
                 [
@@ -168,7 +168,7 @@ class IttecoTicketModule(Component):
     def _ids_to_tickets(self, ids):
         if ids:
             all_types = [type.name for type in Type.select(self.env)]
-            fields = get_fields_by_names(self.env, 'summary')
+            fields = get_fields_by_names(self.env, ['summary', 'complexity', 'owner'])
             tickets = []
             for tkt_info in get_tickets_by_ids(self.env.get_db_cnx(), fields, ids):
                 tkt_info['idx'] ='%02d' % all_types.index(tkt_info['type'])

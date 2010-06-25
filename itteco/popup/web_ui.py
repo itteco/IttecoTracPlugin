@@ -294,8 +294,11 @@ class PopupModule(Component):
         except (TracError, InvalidAttachment), e:
             response = {'error' : e.message }
         
+        content = write(response)
+        
         req.send_response(200)
         req.send_header('Content-Type', 'text/html')
+        req.send_header('Content-Length', len(content))
         req.end_headers()
-        req.write(write(response))
+        req.write(content)
         raise RequestDone
