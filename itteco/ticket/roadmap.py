@@ -582,33 +582,63 @@ class IttecoMilestoneModule(Component):
     def xmlrpc_methods(self):
         yield (None, ((dict, dict),), self.create)
         yield (None, ((dict, str, str, dict),), self.update)
+        yield (None, ((dict, str),), self.delete)
 
     def create(self, req, attributes):
         """ Create a structure milestone object."""
         name = attributes.get('summary')
-        milestone = StructuredMilestone(self.env, name)
-        if milestone.exists:
-            raise TracError('Milestone already with name %s exists' % name)
+        try:
+            if StructuredMilestone(self.env, name).exists:
+                raise TracError('Milestone with name %s already exists' % name)
+        except ResourceNotFound:
+            pass
+            
+        milestone = StructuredMilestone(self.env)
+        milestone.name = name
         req.perm.require('MILESTONE_CREATE', Resource(milestone.resource.realm))
+        
         milestone.description = attributes.get('description')
-        for k, v in attributes.iteritems():
-            milestone.ticket[k] = v
+        
+        milestone.ticket.populate(attributes)
+        milestone.ticket.values['reporter'] = attributes.get('author') or get_reporter_id(req)
         milestone.insert()
         return {'name': milestone.name, 'description': milestone.description}
-    
+
     def update(self, req, name, comment, attributes=None):
         """ Updates a structure milestone object."""
         milestone = StructuredMilestone(self.env, name)
         if not milestone.exists:
             raise TracError('Milestone with name %s does not exist' % name)
-        req.perm.require('MILESTONE_CREATE', Resource(milestone.resource.realm))
+        req.perm.require('MILESTONE_MODIFY', Resource(milestone.resource.realm))
         if attributes is not None:
             milestone.name = attributes.get('summary')
             milestone.description = attributes.get('description')
-            for k, v in attributes.iteritems():
-                milestone.ticket[k] = v
+            milestone.ticket.populate(attributes)
+            def set_date(name, attr_name = None):
+                val = attributes.get(name)
+                if val is None:
+                    return
+                val = val and parse_date(val, tzinfo=req.tz) or None
+                if attr_name is not None:
+                    setattr(milestone, attr_name, val)
+                milestone.ticket[name] = val and str(to_timestamp(val))
+                
+            set_date('duedate', 'due')
+            set_date('completeddate', 'completed')
+            set_date('started')
+            
         milestone.save_changes(get_reporter_id(req, 'author'), comment)
         return {'name': milestone.name, 'description': milestone.description}
+        
+    def delete(self, req, name):
+        """ Deletes structure milestone object."""
+        milestone = StructuredMilestone(self.env, name)
+        if not milestone.exists:
+            raise TracError('Milestone with name %s does not exist' % name)
+        req.perm.require('MILESTONE_DELETE', Resource(milestone.resource.realm))
+        milestone.delete()
+        return {'name': milestone.name, 'description': milestone.description}
+
     
 class IttecoRoadmapModule(RoadmapModule):
     _calculate_statistics_on = ListOption('itteco-roadmap-config', 'calc_stats_on', [])   
