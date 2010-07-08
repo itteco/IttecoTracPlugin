@@ -155,7 +155,7 @@ class IttecoMilestoneModule(Component):
         which is used to collect statistics on groups of tickets for display
         in the milestone views.""")
 
-    date_fields = ('started', 'duedate', 'completed')
+    date_fields = ('started', 'duedate', 'completedate')
 
     # INavigationContributor methods
 
@@ -342,7 +342,7 @@ class IttecoMilestoneModule(Component):
         milestone.due = due and parse_date(due, tzinfo=req.tz) or None
         milestone.ticket['duedate']=milestone.due and str(to_timestamp(milestone.due)) or None
 
-        completed = req.args.get('completeddate', '')
+        completed = req.args.get('completedate', '')
         retarget_to = req.args.get('target')
 
         # Instead of raising one single error, check all the constraints and
@@ -600,6 +600,19 @@ class IttecoMilestoneModule(Component):
         milestone.description = attributes.get('description')
         
         milestone.ticket.populate(attributes)
+        def set_date(name, attr_name = None):
+            val = attributes.get(name)
+            if val is None:
+                return
+            val = val and parse_date(val, tzinfo=req.tz) or None
+            if attr_name is not None:
+                setattr(milestone, attr_name, val)
+            milestone.ticket[name] = val and str(to_timestamp(val))
+            
+        set_date('duedate', 'due')
+        set_date('completedate', 'completed')
+        set_date('started')
+
         milestone.ticket.values['reporter'] = attributes.get('author') or get_reporter_id(req)
         milestone.insert()
         return {'name': milestone.name, 'description': milestone.description}
@@ -624,7 +637,7 @@ class IttecoMilestoneModule(Component):
                 milestone.ticket[name] = val and str(to_timestamp(val))
                 
             set_date('duedate', 'due')
-            set_date('completeddate', 'completed')
+            set_date('completedate', 'completed')
             set_date('started')
             
         milestone.save_changes(get_reporter_id(req, 'author'), comment)
