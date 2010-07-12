@@ -580,9 +580,27 @@ class IttecoMilestoneModule(Component):
         return 'structured_milestone'
 
     def xmlrpc_methods(self):
+        yield (None, ((dict, str),), self.get)
         yield (None, ((dict, dict),), self.create)
         yield (None, ((dict, str, str, dict),), self.update)
         yield (None, ((dict, str),), self.delete)
+        
+    def _milestone_as_dict(self, milestone):
+        return {
+            'name': milestone.name, 
+            'due': milestone.due, 
+            'completed': milestone.completed, 
+            'description': milestone.description,
+            'ticket': (milestone.ticket.id, milestone.ticket.time_created, milestone.ticket.time_changed, milestone.ticket.values)
+        }
+        
+    def get(self, req, name):
+        """ Get a structure milestone object."""
+        milestone = StructuredMilestone(self.env, name)
+        req.perm.require('MILESTONE_VIEW', Resource(milestone.resource.realm))
+        if not milestone.exists:
+            raise TracError('Milestone with name %s does not exist' % name)
+        return self._milestone_as_dict(milestone)
 
     def create(self, req, attributes):
         """ Create a structure milestone object."""
@@ -615,7 +633,7 @@ class IttecoMilestoneModule(Component):
 
         milestone.ticket.values['reporter'] = attributes.get('author') or get_reporter_id(req)
         milestone.insert()
-        return {'name': milestone.name, 'description': milestone.description}
+        return self._milestone_as_dict(milestone)
 
     def update(self, req, name, comment, attributes=None):
         """ Updates a structure milestone object."""
@@ -641,7 +659,7 @@ class IttecoMilestoneModule(Component):
             set_date('started')
             
         milestone.save_changes(get_reporter_id(req, 'author'), comment)
-        return {'name': milestone.name, 'description': milestone.description}
+        return self._milestone_as_dict(milestone)
         
     def delete(self, req, name):
         """ Deletes structure milestone object."""
